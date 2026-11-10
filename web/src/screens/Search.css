@@ -27,3 +27,65 @@
   min-width: 0;
 }
 .search-bar input::placeholder { color: var(--text-dim); }
+
+.search-section {
+  margin-bottom: 18px;
+}
+.search-section-title {
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  margin: 4px 0 8px;
+}
+.search-artist-list {
+  list-style: none;
+}
+.search-artist-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--divider);
+  text-align: left;
+}
+.search-artist-list li:last-child .search-artist-row {
+  border-bottom: none;
+}
+.search-artist-row:active {
+  background: rgba(255, 255, 255, 0.04);
+  margin: 0 -16px;
+  padding: 10px 16px;
+}
+.search-artist-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+.search-artist-avatar.ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  color: rgba(255, 255, 255, 0.35);
+}
+.search-artist-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.search-artist-chev {
+  color: var(--text-muted);
+  font-size: 1.3rem;
+  line-height: 1;
+  flex-shrink: 0;
+  padding: 0 4px;
+}

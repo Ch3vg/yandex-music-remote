@@ -1,30 +1,67 @@
-import { useState } from 'react';
-import type { CatalogTrack } from '../api/types';
+import { useEffect, useState } from 'react';
 import { fetchJson } from '../api/http';
+import type { ArtistCard, CatalogTrack, SearchResponse } from '../api/types';
 import { TrackRow } from '../components/TrackRow';
+import { normalizeCoverUrl } from '../lib/coverUrl';
 import './Search.css';
 
 type Props = {
   active: boolean;
   fromHome: boolean;
   onBack: () => void;
+  onOpenArtist: (artistId: number, name: string) => void;
   onPlay: (track: CatalogTrack) => void;
   onMenu: (track: CatalogTrack) => void;
 };
 
-export function Search({ active, fromHome, onBack, onPlay, onMenu }: Props) {
+function ArtistAvatar({ url }: { url: string | null }) {
+  const src = normalizeCoverUrl(url, '200x200');
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  if (!src || failed) {
+    return (
+      <span className="search-artist-avatar ph" aria-hidden="true">
+        ♪
+      </span>
+    );
+  }
+
+  return (
+    <img
+      className="search-artist-avatar"
+      src={src}
+      alt=""
+      width={48}
+      height={48}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+export function Search({ active, fromHome, onBack, onOpenArtist, onPlay, onMenu }: Props) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [error, setError] = useState('');
+  const [artists, setArtists] = useState<ArtistCard[]>([]);
   const [tracks, setTracks] = useState<CatalogTrack[]>([]);
 
   const run = () => {
     const q = query.trim();
     if (!q) return;
     setStatus('loading');
-    fetchJson<CatalogTrack[]>(`/search?q=${encodeURIComponent(q)}`, 'Ошибка поиска')
+    fetchJson<SearchResponse | CatalogTrack[]>(`/api/search?q=${encodeURIComponent(q)}`, 'Ошибка поиска')
       .then((body) => {
-        setTracks(Array.isArray(body) ? body : []);
+        if (Array.isArray(body)) {
+          setArtists([]);
+          setTracks(body);
+        } else {
+          setArtists(Array.isArray(body?.artists) ? body.artists : []);
+          setTracks(Array.isArray(body?.tracks) ? body.tracks : []);
+        }
         setStatus('done');
       })
       .catch((reason: unknown) => {
@@ -32,6 +69,8 @@ export function Search({ active, fromHome, onBack, onPlay, onMenu }: Props) {
         setStatus('error');
       });
   };
+
+  const nothingFound = status === 'done' && artists.length === 0 && tracks.length === 0;
 
   return (
     <section className={active ? 'screen active' : 'screen'} id="screenSearch">
@@ -65,16 +104,42 @@ export function Search({ active, fromHome, onBack, onPlay, onMenu }: Props) {
           }}
         />
       </div>
-      <ul className="track-list results" id="results">
-        {status === 'loading' ? <li className="list-meta">Ищем в приложении…</li> : null}
-        {status === 'error' ? <li className="list-meta">{error}</li> : null}
-        {status === 'done' && tracks.length === 0 ? <li className="list-meta">Ничего не найдено</li> : null}
-        {status === 'done'
-          ? tracks.map((track, index) => (
+
+      {status === 'loading' ? <p className="list-meta">Ищем в приложении…</p> : null}
+      {status === 'error' ? <p className="list-meta">{error}</p> : null}
+      {nothingFound ? <p className="list-meta">Ничего не найдено</p> : null}
+
+      {status === 'done' && artists.length > 0 ? (
+        <div className="search-section">
+          <h2 className="search-section-title">Исполнители</h2>
+          <ul className="search-artist-list" id="searchArtists">
+            {artists.map((artist) => (
+              <li key={artist.id}>
+                <button
+                  type="button"
+                  className="search-artist-row"
+                  onClick={() => onOpenArtist(artist.id, artist.name)}
+                >
+                  <ArtistAvatar url={artist.cover_url_hq || artist.cover_url} />
+                  <span className="search-artist-name">{artist.name}</span>
+                  <span className="search-artist-chev" aria-hidden="true">›</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {status === 'done' && tracks.length > 0 ? (
+        <div className="search-section">
+          {artists.length > 0 ? <h2 className="search-section-title">Треки</h2> : null}
+          <ul className="track-list results" id="results">
+            {tracks.map((track, index) => (
               <TrackRow key={`${track.id}-${index}`} track={track} variant="list" onPlay={onPlay} onMenu={onMenu} />
-            ))
-          : null}
-      </ul>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </section>
   );
 }

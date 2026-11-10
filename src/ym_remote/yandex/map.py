@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 
 from ym_remote.models.music import Album, Artist, Cover, Playlist, Track
 
@@ -37,10 +38,22 @@ def uri_of(obj) -> str | None:
         return None
     if isinstance(obj, str) and obj:
         return obj
-    for name in ("uri", "cover_uri", "og_image", "dir"):
+    if isinstance(obj, dict):
+        for name in ("uri", "cover_uri", "og_image", "op_image", "dir", "url"):
+            value = obj.get(name)
+            if isinstance(value, str) and value:
+                return value
+        items = obj.get("items_uri") or obj.get("itemsUri")
+        if isinstance(items, (list, tuple)) and items and isinstance(items[0], str) and items[0]:
+            return items[0]
+        return None
+    for name in ("uri", "cover_uri", "og_image", "op_image", "dir"):
         value = _call(getattr(obj, name, None))
         if isinstance(value, str) and value:
             return value
+    items = getattr(obj, "items_uri", None)
+    if isinstance(items, (list, tuple)) and items and isinstance(items[0], str) and items[0]:
+        return items[0]
     return None
 
 
@@ -76,12 +89,23 @@ def track_from_api(track, *, fallback_album_id: int | None = None, index: int | 
     artists = []
     cover_sources: list[str] = []
     for artist in _field(track, "artists") or []:
-        name = _text(_field(artist, "name"))
-        artist_cover = uri_of(_field(artist, "cover")) or uri_of(artist)
+        name = _text(_field(artist, "name")).strip()
+        artist_cover = (
+            uri_of(_field(artist, "cover"))
+            or uri_of(_field(artist, "og_image"))
+            or uri_of(_field(artist, "op_image"))
+            or uri_of(artist)
+        )
         if artist_cover:
             cover_sources.append(artist_cover)
         if name:
-            artists.append(Artist(name=name, id=as_int(_field(artist, "id"))))
+            artists.append(
+                Artist(
+                    name=name,
+                    id=as_int(_field(artist, "id")),
+                    cover=Cover(artist_cover) if artist_cover else None,
+                )
+            )
     albums = []
     for album in _field(track, "albums") or []:
         if isinstance(album, (int, str)) and not isinstance(album, bool):
@@ -126,6 +150,72 @@ def track_from_api(track, *, fallback_album_id: int | None = None, index: int | 
         albums=tuple(albums),
         cover=Cover(cover_uri) if cover_uri else None,
         playlist_index=index,
+    )
+
+
+def artist_from_api(artist, *, fallback_covers=()) -> Artist:
+    name = _text(_field(artist, "name")).strip()
+    artist_id = as_int(_field(artist, "id"))
+    cover_source = (
+        uri_of(_field(artist, "cover"))
+        or uri_of(_field(artist, "og_image"))
+        or uri_of(_field(artist, "op_image"))
+        or uri_of(artist)
+    )
+    if cover_source is None:
+        for candidate in fallback_covers or ():
+            cover_source = uri_of(candidate)
+            if cover_source:
+                break
+    return Artist(
+        name=name,
+        id=artist_id,
+        cover=Cover(cover_source) if cover_source else None,
+    )
+
+
+def album_from_api(album, tracks: tuple[Track, ...] | None = None) -> Album:
+    album_id = as_int(_field(album, "id", "album_id", "albumId"))
+    title = _text(_field(album, "title"))
+    year = as_int(_field(album, "year", "original_release_year"))
+    raw_type = _field(album, "type", "meta_type")
+    album_type = raw_type.strip() if isinstance(raw_type, str) and raw_type.strip() else None
+    raw_version = _field(album, "version")
+    version = raw_version.strip() if isinstance(raw_version, str) and raw_version.strip() else None
+    cover_source = uri_of(_field(album, "cover_uri", "og_image", "cover")) or uri_of(album)
+    artists = tuple(
+        artist_from_api(item)
+        for item in (_field(album, "artists") or [])
+        if _text(_field(item, "name")).strip()
+    )
+    resolved_tracks: list[Track] = list(tracks or ())
+    if not resolved_tracks:
+        idx = 0
+        album_cover = Cover(cover_source) if cover_source else None
+        for volume in _field(album, "volumes") or []:
+            for item in volume or []:
+                mapped_track = track_from_api(item, fallback_album_id=album_id, index=idx)
+                if mapped_track.cover is None and album_cover is not None:
+                    mapped_track = replace(mapped_track, cover=album_cover)
+                if not mapped_track.artists and artists:
+                    mapped_track = replace(mapped_track, artists=artists)
+                resolved_tracks.append(mapped_track)
+                idx += 1
+    declared = as_int(_field(album, "track_count", "trackCount"))
+    if declared is not None and (declared > 0 or not resolved_tracks):
+        track_count = declared
+    else:
+        track_count = len(resolved_tracks)
+    return Album(
+        id=album_id,
+        title=title,
+        cover=Cover(cover_source) if cover_source else None,
+        year=year,
+        album_type=album_type,
+        version=version,
+        track_count=track_count,
+        artists=artists,
+        tracks=tuple(resolved_tracks),
     )
 
 

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from ym_remote.models.playback import Playback
+from ym_remote.schemas.catalog import ArtistRefWire
 
 RepeatMode = Literal["off", "queue", "one"]
 
@@ -29,6 +30,7 @@ class PlaybackWire(BaseModel):
     shuffle: bool = False
     liked: bool = False
     queue_name: str = ""
+    artists: list[ArtistRefWire] = Field(default_factory=list)
 
     @classmethod
     def from_playback(cls, playback: Playback) -> PlaybackWire:
@@ -51,6 +53,7 @@ class PlaybackWire(BaseModel):
             shuffle=playback.shuffle,
             liked=playback.liked,
             queue_name=playback.queue_name,
+            artists=[ArtistRefWire.from_artist(artist) for artist in playback.artists],
         )
 
 

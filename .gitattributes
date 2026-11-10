@@ -16,3 +16,5 @@ web/** text eol=lf
 # Binary assets
 *.ico binary
 *.png binary
+*.woff binary
+*.woff2 binary

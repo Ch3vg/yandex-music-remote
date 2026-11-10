@@ -82,6 +82,21 @@
   font-size: 0.85rem;
   color: var(--text-muted);
   margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.queue-row-action {
+  color: var(--text-muted);
+  padding: 8px;
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.queue-row-action svg {
+  display: block;
 }
 .queue-empty {
   color: var(--text-muted);

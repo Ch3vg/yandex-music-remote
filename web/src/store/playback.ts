@@ -1,5 +1,5 @@
 import { useRef, useSyncExternalStore } from 'react';
-import type { QueueItem, QueuePayload, RepeatMode } from '../api/types';
+import type { ArtistRef, QueueItem, QueuePayload, RepeatMode } from '../api/types';
 import { lookFromImage, resetMini, type MiniLook } from '../lib/palette';
 
 export type ToastItem = {
@@ -15,6 +15,8 @@ type State = {
   trackId: string;
   title: string;
   artist: string;
+  artists: ArtistRef[];
+  artistHref: string | null;
   coverUrl: string | null;
   coverHq: string | null;
   isPlaying: boolean;
@@ -45,6 +47,8 @@ export type PlaybackView = {
   trackId: string;
   title: string;
   artist: string;
+  artists: ArtistRef[];
+  artistHref: string | null;
   coverUrl: string | null;
   coverHq: string | null;
   isPlaying: boolean;
@@ -69,6 +73,8 @@ export type PlaybackFields = {
   track_id: string;
   title: string;
   artist: string;
+  artists?: ArtistRef[];
+  artist_href?: string | null;
   is_playing: boolean;
   cover_url: string | null;
   cover_url_hq: string | null;
@@ -99,6 +105,8 @@ const state: State = {
   trackId: '',
   title: '—',
   artist: '—',
+  artists: [],
+  artistHref: null,
   coverUrl: null,
   coverHq: null,
   isPlaying: false,
@@ -138,6 +146,8 @@ function toView(): PlaybackView {
     trackId: state.trackId,
     title: state.title,
     artist: state.artist,
+    artists: state.artists,
+    artistHref: state.artistHref,
     coverUrl: state.coverUrl,
     coverHq: state.coverHq,
     isPlaying: state.isPlaying,
@@ -296,11 +306,20 @@ export function applyPlayback(msg: PlaybackFields, full: boolean): boolean {
     state.trackId = incoming || state.trackId;
     state.title = msg.title || '—';
     state.artist = msg.artist || '—';
+    state.artists = msg.artists ?? [];
+    state.artistHref = msg.artist_href ?? null;
     const coverHq = msg.cover_url_hq || msg.cover_url;
     state.coverHq = coverHq;
     state.coverUrl = msg.cover_url || coverHq;
     if (coverHq) requestPalette(coverHq);
     else clearCover();
+  } else {
+    if (msg.artists && msg.artists.length > 0) {
+      state.artists = msg.artists;
+    }
+    if (msg.artist_href != null) {
+      state.artistHref = msg.artist_href;
+    }
   }
   const incomingPlaying = msg.is_playing !== false;
   if (playLockTarget !== null) {
@@ -363,6 +382,8 @@ export function applyPlayback(msg: PlaybackFields, full: boolean): boolean {
 export function markStopped(): void {
   state.hasTrack = false;
   state.trackId = '';
+  state.artists = [];
+  state.artistHref = null;
   state.isPlaying = false;
   state.playing = false;
   emit();

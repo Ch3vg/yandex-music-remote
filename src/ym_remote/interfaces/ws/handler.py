@@ -10,8 +10,18 @@ from ym_remote.schemas.play import PlayCommand
 from ym_remote.schemas.queue import queue_message
 from ym_remote.services.monitor import MonitorService
 from ym_remote.services.queue import QueueService
-from ym_remote.services.texts import PLAY_FAILED
+from ym_remote.services.texts import ALBUM_PLAY_FAILED, ARTIST_PLAY_FAILED, PLAY_FAILED
 from ym_remote.services.transport import TransportService
+
+
+def _positive_id(raw) -> int | None:
+    if isinstance(raw, bool) or raw is None:
+        return None
+    try:
+        parsed = int(raw)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return parsed if parsed > 0 else None
 
 
 class CommandHandler:
@@ -127,6 +137,30 @@ class CommandHandler:
             await self.transport.navigate(target)
         except RemoteError as exc:
             await self._error(websocket, exc.message)
+
+    async def _cmd_play_artist(self, websocket, message: dict) -> None:
+        artist_id = _positive_id(message.get("artist_id"))
+        if artist_id is None:
+            await self._error(websocket, ARTIST_PLAY_FAILED)
+            return
+        try:
+            await self.transport.play_artist(artist_id)
+        except RemoteError as exc:
+            await self._error(websocket, exc.message)
+            return
+        await self.monitor.command_tick(websocket, 0.2)
+
+    async def _cmd_play_album(self, websocket, message: dict) -> None:
+        album_id = _positive_id(message.get("album_id"))
+        if album_id is None:
+            await self._error(websocket, ALBUM_PLAY_FAILED)
+            return
+        try:
+            await self.transport.play_album(album_id)
+        except RemoteError as exc:
+            await self._error(websocket, exc.message)
+            return
+        await self.monitor.command_tick(websocket, 0.2)
 
     async def _cmd_play_now(self, websocket, message: dict) -> None:
         request = self._play_request(message)
