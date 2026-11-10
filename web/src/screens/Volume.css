@@ -1,0 +1,21 @@
+.volume-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100dvh - var(--mini-h) - var(--tab-h) - 120px);
+  padding: 24px 8px;
+  gap: 28px;
+}
+.volume-screen .vol-icon-dynamic { color: rgba(255, 255, 255, 0.55); }
+.volume-screen input[type=range] {
+  width: 100%;
+  max-width: 320px;
+  accent-color: var(--accent);
+  height: 6px;
+}
+.volume-screen .vol-pct {
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}

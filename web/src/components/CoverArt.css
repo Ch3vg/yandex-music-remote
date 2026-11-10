@@ -1,0 +1,9 @@
+.track-list .cover,
+.likes-row .cover {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--surface-2);
+  flex-shrink: 0;
+}

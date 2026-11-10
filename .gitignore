@@ -1,0 +1,33 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+/dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Frontend dependencies (web/dist отслеживается, чтобы пульт работал без Node.js)
+node_modules/
+web/node_modules/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Runtime logs & built launcher binary
+cdp/*.log
+YandexMusicRemote.exe
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

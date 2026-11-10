@@ -1,0 +1,48 @@
+#screenPlaylist {
+  display: none;
+  flex-direction: column;
+  max-height: calc(100dvh - var(--mini-h) - var(--safe-b) - 8px);
+  overflow: hidden;
+}
+#screenPlaylist.active {
+  display: flex;
+}
+#screenPlaylist .track-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.playlist-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0 8px;
+}
+.playlist-header h1 {
+  flex: 1;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-align: center;
+  margin-right: 44px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.playlist-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+.playlist-search input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 1rem;
+  outline: none;
+  min-width: 0;
+}

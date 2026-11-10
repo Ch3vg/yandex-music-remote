@@ -1,0 +1,18 @@
+* text=auto
+
+# Git hooks and shell scripts must keep LF line endings on all OSes
+.githooks/* text eol=lf
+*.sh text eol=lf
+
+# Frontend files keep LF so Vite bundle hashes are identical on Windows and Linux CI
+web/** text eol=lf
+
+# Windows scripts must keep CRLF line endings (especially cmd.exe batch labels)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.vbs text eol=crlf
+
+# Binary assets
+*.ico binary
+*.png binary

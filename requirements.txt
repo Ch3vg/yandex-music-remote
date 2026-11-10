@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+yandex-music
+aiohttp
+pillow
+qrcode[pil]
+websocket-client
+pytest
+pytest-asyncio
+httpx

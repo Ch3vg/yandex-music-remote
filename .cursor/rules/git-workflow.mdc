@@ -1,0 +1,33 @@
+---
+description: Правила Git-процесса, защиты веток master/dev и обязательного запуска автотестов
+alwaysApply: true
+---
+
+# Git Workflow & Autotests
+
+- **Схема ветвления**: все изменения ведутся только в рабочих ветках от `dev` (`feat/*`, `fix/*`, `refactor/*`, `chore/*`, `docs/*`).
+- **Поток слияний**: `рабочая ветка -> PR в dev -> PR в master`.
+- **Запрещено**:
+  - Делать прямые коммиты и прямой `git push` в `master` или `dev`.
+  - Открывать PR в `master` из любой ветки кроме `dev`.
+  - Использовать `--no-verify` для обхода Git-хуков.
+- **Перед каждым коммитом обязательно выполнять**:
+  1. `.\.venv\Scripts\python.exe scripts/check_repo.py --staged`
+  2. `.\.venv\Scripts\python.exe -m pytest -q`
+  3. Если затронута папка `web/`: `npm --prefix web run build` и `git add web/dist`, затем `.\.venv\Scripts\python.exe scripts/check_repo.py --verify-dist`.
+
+```powershell
+# ❌ Неправильно
+git checkout master
+git commit -m "fix: quick patch"
+git push origin master
+
+# ✅ Правильно
+git checkout dev
+git pull origin dev
+git checkout -b fix/player-volume
+.\.venv\Scripts\python.exe -m pytest -q
+git commit -m "fix: handle volume edge case"
+git push -u origin fix/player-volume
+# Далее: PR fix/player-volume -> dev, затем PR dev -> master
+```

@@ -1,0 +1,19 @@
+---
+description: Синхронизация собранного фронтенда web/dist при любых правках в web/
+globs: web/**
+alwaysApply: false
+---
+
+# Синхронизация `web/dist`
+
+Собранный бандл `web/dist` хранится в Git, чтобы пользователи могли запускать пульт без установленного Node.js.
+
+- При любом изменении файлов в `web/src/**`, `web/index.html`, `web/package.json`, `web/tsconfig.json` или `web/vite.config.ts` обязательно пересобирайте фронтенд перед коммитом:
+
+```powershell
+npm --prefix web run build
+git add web/dist
+.\.venv\Scripts\python.exe scripts/check_repo.py --verify-dist
+```
+
+- Не редактируйте файлы внутри `web/dist/` вручную — они перезаписываются сборкой Vite.

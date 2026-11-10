@@ -1,0 +1,47 @@
+name: Branch Flow
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+
+jobs:
+  branch-flow:
+    name: branch-flow
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate source and target branches
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          echo "PR: ${HEAD_REPO}:${HEAD_REF} -> ${BASE_REPO}:${BASE_REF}"
+
+          if [ "${BASE_REF}" = "master" ]; then
+            if [ "${HEAD_REPO}" != "${BASE_REPO}" ] || [ "${HEAD_REF}" != "dev" ]; then
+              echo "::error::В ветку 'master' разрешены Pull Request только из ветки 'dev' этого же репозитория (получено: '${HEAD_REPO}:${HEAD_REF}')."
+              exit 1
+            fi
+            echo "OK: слияние dev -> master разрешено."
+            exit 0
+          fi
+
+          if [ "${BASE_REF}" = "dev" ]; then
+            if [ "${HEAD_REF}" = "master" ]; then
+              echo "::error::Обратное слияние 'master' -> 'dev' запрещено. Создайте рабочую ветку (например, feat/* или fix/*) и влейте её в 'dev'."
+              exit 1
+            fi
+            echo "OK: слияние рабочей ветки '${HEAD_REF}' -> 'dev' разрешено."
+            exit 0
+          fi
+
+          echo "::error::Все рабочие ветки должны сливаться только в 'dev', а из 'dev' — в 'master' (текущая целевая ветка: '${BASE_REF}')."
+          exit 1

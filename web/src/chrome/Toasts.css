@@ -1,0 +1,22 @@
+.toast-host {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 100;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 456px;
+  margin: 0 auto;
+}
+.error-toast, .notice-toast {
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  pointer-events: auto;
+  backdrop-filter: blur(12px);
+}
+.error-toast { background: rgba(60, 20, 20, 0.92); color: #ff8a80; }
+.notice-toast { background: rgba(40, 40, 20, 0.92); color: var(--accent); }

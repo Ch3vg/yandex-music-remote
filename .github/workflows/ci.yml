@@ -1,0 +1,94 @@
+name: Autotests
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - master
+      - dev
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: autotests-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pytest-and-web-build:
+    name: pytest-and-web-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set commit status (pending)
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh api "repos/${{ github.repository }}/statuses/${TARGET_SHA}" \
+            -f state="pending" \
+            -f context="autotests" \
+            -f description="pending — выполняются автотесты" \
+            -f target_url="${RUN_URL}"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: "requirements.txt"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Scan secrets, conflict markers and forbidden files
+        run: python scripts/check_repo.py --all
+
+      - name: Run pytest suite
+        run: pytest -v
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: "web/package-lock.json"
+
+      - name: Install frontend dependencies
+        run: npm --prefix web ci
+
+      - name: Typecheck and build frontend
+        run: npm --prefix web run build
+
+      - name: Verify web/dist is in sync with web/src
+        run: python scripts/check_repo.py --verify-dist
+
+      - name: Update commit status (passed / failed)
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          JOB_STATUS: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ "${JOB_STATUS}" = "success" ]; then
+            STATE="success"
+            DESC="passed — все автотесты пройдены"
+          elif [ "${JOB_STATUS}" = "cancelled" ]; then
+            exit 0
+          else
+            STATE="failure"
+            DESC="failed — автотесты или проверки не пройдены"
+          fi
+          gh api "repos/${{ github.repository }}/statuses/${TARGET_SHA}" \
+            -f state="${STATE}" \
+            -f context="autotests" \
+            -f description="${DESC}" \
+            -f target_url="${RUN_URL}"

@@ -1,0 +1,46 @@
+#!/bin/sh
+set -eu
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+# 1. Запрет прямых коммитов в master и dev (кроме первого коммита при инициализации репозитория)
+BRANCH="$(git symbolic-ref --short -q HEAD || true)"
+if git rev-parse --verify HEAD >/dev/null 2>&1; then
+  if [ "${YM_ALLOW_PROTECTED_COMMIT:-0}" != "1" ] && { [ "$BRANCH" = "master" ] || [ "$BRANCH" = "dev" ]; }; then
+    echo "Ошибка: прямые коммиты в защищённую ветку '$BRANCH' запрещены." >&2
+    echo "Создайте рабочую ветку от dev: git checkout -b feat/<название> dev" >&2
+    exit 1
+  fi
+fi
+
+if [ -x ".venv/Scripts/python.exe" ]; then
+  PYTHON=".venv/Scripts/python.exe"
+elif [ -x ".venv/bin/python" ]; then
+  PYTHON=".venv/bin/python"
+elif command -v python3 >/dev/null 2>&1; then
+  PYTHON="python3"
+else
+  PYTHON="python"
+fi
+
+echo "[pre-commit] 1/3 Проверка секретов, маркеров конфликтов и запрещённых файлов..."
+"$PYTHON" scripts/check_repo.py --staged
+
+WEB_CHANGED="$(git diff --cached --name-only -- 'web/' || true)"
+if [ -n "$WEB_CHANGED" ]; then
+  echo "[pre-commit] 2/3 Проверка TypeScript, сборки Vite и синхронизации web/dist..."
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "Ошибка: изменены файлы в web/, но npm не найден в PATH для проверки сборки." >&2
+    exit 1
+  fi
+  npm --prefix web run build >/dev/null
+  "$PYTHON" scripts/check_repo.py --verify-dist
+else
+  echo "[pre-commit] 2/3 Проверка целостности web/dist..."
+  "$PYTHON" scripts/check_repo.py --verify-dist
+fi
+
+echo "[pre-commit] 3/3 Запуск автотестов pytest..."
+"$PYTHON" -m pytest -q
+echo "[pre-commit] Все проверки и автотесты успешно пройдены."
