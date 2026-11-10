@@ -15,3 +15,6 @@ class PlayRequest:
     playlist_uid: int | None = None
     playlist_uuid: str | None = None
     playlist_track_index: int | None = None
+    artist_id: int | None = None
+    artist_mode: str | None = None
+    context_album_id: int | None = None

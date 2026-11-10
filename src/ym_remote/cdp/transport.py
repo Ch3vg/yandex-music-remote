@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from ym_remote.cdp.adapter import CdpAdapter
 from ym_remote.cdp.scripts import (
+    album_play_script,
+    album_row_script,
+    artist_play_script,
+    artist_row_script,
     cycle_repeat_script,
     navigate_script,
     next_script,
@@ -18,7 +22,7 @@ from ym_remote.cdp.scripts import (
 
 
 class TransportCdpAdapter(CdpAdapter):
-    """Умеет включить строку плейлиста и страницу трека. Порядок попыток выбирает сервис."""
+    """Умеет включить строку плейлиста, артиста, альбома и страницу трека. Порядок попыток выбирает сервис."""
 
     async def play_pause(self) -> bool:
         return await self._bool(play_pause_script())
@@ -50,6 +54,14 @@ class TransportCdpAdapter(CdpAdapter):
     async def navigate(self, target: str) -> bool:
         return await self._bool(navigate_script(target))
 
+    async def play_artist(self, artist_id: int) -> str:
+        expression = artist_play_script(artist_id)
+        return await self._code(expression, timeout=35)
+
+    async def play_album(self, album_id: int) -> str:
+        expression = album_play_script(album_id)
+        return await self._code(expression, timeout=35)
+
     async def play_playlist_row(
         self,
         *,
@@ -59,6 +71,28 @@ class TransportCdpAdapter(CdpAdapter):
         index: int | None,
     ) -> str:
         expression = playlist_script(playlist_uuid, track_id, album_id, index, "play")
+        return await self._code(expression, timeout=35)
+
+    async def play_artist_row(
+        self,
+        *,
+        artist_id: int,
+        mode: str | None,
+        track_id: int,
+        album_id: int | None,
+        index: int | None,
+    ) -> str:
+        expression = artist_row_script(artist_id, mode, track_id, album_id, index, "play")
+        return await self._code(expression, timeout=35)
+
+    async def play_album_row(
+        self,
+        *,
+        album_id: int,
+        track_id: int,
+        index: int | None,
+    ) -> str:
+        expression = album_row_script(album_id, track_id, index, "play")
         return await self._code(expression, timeout=35)
 
     async def play_track_page(self, track_id: int, album_id: int | None) -> str:
@@ -75,6 +109,30 @@ class TransportCdpAdapter(CdpAdapter):
         action: str,
     ) -> str:
         expression = playlist_script(playlist_uuid, track_id, album_id, index, action)
+        return await self._code(expression, timeout=35)
+
+    async def menu_artist_row(
+        self,
+        *,
+        artist_id: int,
+        mode: str | None,
+        track_id: int,
+        album_id: int | None,
+        index: int | None,
+        action: str,
+    ) -> str:
+        expression = artist_row_script(artist_id, mode, track_id, album_id, index, action)
+        return await self._code(expression, timeout=35)
+
+    async def menu_album_row(
+        self,
+        *,
+        album_id: int,
+        track_id: int,
+        index: int | None,
+        action: str,
+    ) -> str:
+        expression = album_row_script(album_id, track_id, index, action)
         return await self._code(expression, timeout=35)
 
     async def menu_track_page(self, track_id: int, album_id: int | None, action: str) -> str:

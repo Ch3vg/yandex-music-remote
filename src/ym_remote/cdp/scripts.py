@@ -159,6 +159,53 @@ async function ymInAppGo(path) {
   location.assign(path);
   return true;
 }
+function ymArtistIdFromHref(href) {
+  if (!href) return null;
+  try {
+    const url = new URL(href, location.href);
+    const q = url.searchParams.get("artistId");
+    if (q && /^\d+$/.test(q)) return Number(q);
+    const parts = url.pathname.split("/").filter(Boolean);
+    const at = parts.lastIndexOf("artist");
+    if (at >= 0 && /^\d+$/.test(parts[at + 1] || "")) return Number(parts[at + 1]);
+  } catch (error) {}
+  const match = String(href).match(/(?:artistId=|\/artist\/)(\d+)/);
+  return match ? Number(match[1]) : null;
+}
+function ymReadArtistRefs(scope) {
+  if (!scope || !scope.querySelectorAll) return [];
+  const refs = [];
+  const seen = new Set();
+  const pushRef = (name, id) => {
+    const clean = (name || "").trim();
+    if (!clean) return;
+    const key = (id != null ? String(id) : "") + "|" + clean;
+    if (seen.has(key)) return;
+    seen.add(key);
+    refs.push({ id: id != null ? id : null, name: clean });
+  };
+  const blocks = scope.querySelectorAll('[data-test-id="SEPARATED_ARTIST_TITLE"]');
+  for (const block of blocks) {
+    const links = block.querySelectorAll('a[href*="artist"]');
+    if (links.length) {
+      for (const link of links) {
+        pushRef(ymText(link), ymArtistIdFromHref(link.getAttribute("href") || link.href));
+      }
+    } else if (block.matches && block.matches("a[href]")) {
+      pushRef(ymText(block), ymArtistIdFromHref(block.getAttribute("href") || block.href));
+    } else {
+      const anyLink = block.querySelector("a[href]");
+      const id = anyLink ? ymArtistIdFromHref(anyLink.getAttribute("href") || anyLink.href) : null;
+      pushRef(ymText(block), id);
+    }
+  }
+  if (!refs.length) {
+    for (const link of scope.querySelectorAll('a[href*="artist"]')) {
+      pushRef(ymText(link), ymArtistIdFromHref(link.getAttribute("href") || link.href));
+    }
+  }
+  return refs;
+}
 """
 
 
@@ -226,6 +273,10 @@ const liked = likeButton ? ymLikeActive(likeButton.getAttribute("data-test-id") 
 let artistHref = null;
 const artistLink = (ymById("PLAYERBAR_DESKTOP") || document).querySelector('[data-test-id="SEPARATED_ARTIST_TITLE"] a');
 if (artistLink) artistHref = artistLink.href || null;
+let artistRefs = ymReadArtistRefs(artistRoot);
+if (!artistRefs.length && artists.length) {
+  artistRefs = artists.map((name) => ({ id: null, name }));
+}
 let albumHref = null;
 const coverBox = ymById("PLAYERBAR_DESKTOP_COVER_CONTAINER");
 const albumLink = coverBox && coverBox.querySelector("a");
@@ -253,7 +304,7 @@ if (!queueName) {
   queueName = ymText(ymById("PLAY_QUEUE_NOW_PLAYING_BLOCK_TITLE")) || ymText(ymById("PLAY_QUEUE_NOW_PLAYING_BLOCK_SUBTITLE"));
 }
 return {
-  title, artists, cover_url: cover || null, is_playing: isPlaying, volume,
+  title, artists, artist_refs: artistRefs, cover_url: cover || null, is_playing: isPlaying, volume,
   position_sec: position, duration_sec: duration, repeat_mode: repeatMode,
   shuffle, liked, artist_href: artistHref, album_href: albumHref, queue_name: queueName
 };
@@ -1031,11 +1082,29 @@ for (const card of cards) {
     const label = card.getAttribute("aria-label") || "";
     if (label) artists = [label];
   }
+  const artistRefs = ymReadArtistRefs(card);
   const image = card.querySelector('[data-test-id="ENTITY_COVER_IMAGE"] img') || card.querySelector('[data-test-id="ENTITY_COVER_IMAGE"]');
   const cover = image ? (image.getAttribute("src") || "") : "";
-  tracks.push({ title, artists, track_id: trackId, album_id: albumId, cover });
+  tracks.push({ title, artists, artist_refs: artistRefs, track_id: trackId, album_id: albumId, cover });
 }
-return { ok: true, tracks };
+const artistCards = [];
+const seenArtists = new Set();
+const searchScope = ymById("SEARCH_PAGE") || document;
+for (const anchor of searchScope.querySelectorAll('a[href*="artist"]')) {
+  if (artistCards.length >= 6) break;
+  if (anchor.closest('[data-test-id="SEARCH_TRACK_CARD"], [data-test-id="TRACK_PLAYLIST"], [data-test-id="TRACK_ALBUM"], [data-test-id="SEPARATED_ARTIST_TITLE"], [data-test-id="PLAY_QUEUE"], [data-test-id="PLAYERBAR_DESKTOP"], [data-test-id="FULLSCREEN_PLAYER_MODAL"], [data-test-id="VIBE_PLAYERBAR"]')) continue;
+  const artistId = ymArtistIdFromHref(anchor.getAttribute("href") || anchor.href);
+  if (artistId == null || seenArtists.has(artistId)) continue;
+  const cardRoot = anchor.closest('[data-test-id*="ARTIST"], [data-test-id*="CARD"], li, article') || anchor.parentElement || anchor;
+  const titleNode = (cardRoot && (ymById("ARTIST_TITLE", cardRoot) || ymById("TITLE", cardRoot))) || anchor;
+  const name = (ymText(anchor) || ymText(titleNode) || (anchor.getAttribute("aria-label") || "")).trim();
+  if (!name || name.length > 120) continue;
+  seenArtists.add(artistId);
+  const img = cardRoot ? (cardRoot.querySelector('[data-test-id="ENTITY_COVER_IMAGE"] img') || cardRoot.querySelector("img")) : null;
+  const cover = img ? (img.getAttribute("src") || "") : "";
+  artistCards.push({ id: artistId, name, cover });
+}
+return { ok: true, tracks, artist_cards: artistCards };
 """,
         QUERY=query,
     )
@@ -1074,10 +1143,12 @@ function parseRow(row) {
     } catch (error) {}
   }
   const artists = Array.from(row.querySelectorAll('[data-test-id="SEPARATED_ARTIST_TITLE"]')).map((el) => ymText(el)).filter(Boolean);
+  const artistRefs = ymReadArtistRefs(row);
   const image = row.querySelector('[data-test-id="ENTITY_COVER_IMAGE"] img') || row.querySelector('[data-test-id="ENTITY_COVER_IMAGE"]');
   return {
     title: ymText(ymById("TRACK_TITLE", row)),
     artists,
+    artist_refs: artistRefs,
     cover: image ? (image.getAttribute("src") || "") : "",
     track_id: parsedTrack,
     album_id: parsedAlbum,
@@ -1138,4 +1209,759 @@ return view;
 """,
         MODE=mode,
         TRACK_ID=track_id,
+    )
+
+
+def artist_play_script(artist_id: int) -> str:
+    return fill(
+        r"""
+const artistId = String(__ARTIST_ID__);
+function primaryPath() {
+  return "/artist?artistId=" + encodeURIComponent(artistId);
+}
+function altPath() {
+  return "/artist/" + encodeURIComponent(artistId);
+}
+function onArtist() {
+  try {
+    const url = new URL(location.href);
+    if (url.searchParams.get("artistId") === artistId) {
+      return !url.pathname.includes("/tracks") && !url.pathname.includes("/familiar");
+    }
+    const parts = url.pathname.split("/").filter(Boolean);
+    const at = parts.lastIndexOf("artist");
+    return at >= 0 && parts[at + 1] === artistId && parts.length === at + 2;
+  } catch (error) { return false; }
+}
+function queueOpen() {
+  const panel = ymById("PLAY_QUEUE");
+  if (!panel) return false;
+  const rect = panel.getBoundingClientRect();
+  const style = getComputedStyle(panel);
+  return rect.width >= 2 && rect.height >= 2 && style.display !== "none" && style.visibility !== "hidden";
+}
+function queueToggle() {
+  const panel = ymById("PLAY_QUEUE");
+  const modal = ymById("FULLSCREEN_PLAYER_MODAL");
+  const picks = [];
+  if (panel && modal && modal.contains(panel)) {
+    const full = ymById("FULLSCREEN_PLAYER_QUEUE_BUTTON");
+    if (full) picks.push(full);
+  }
+  for (const el of document.querySelectorAll("button, [role='button']")) {
+    const id = el.getAttribute("data-test-id") || "";
+    if (id.indexOf("PLAY_QUEUE") === -1 || id === "PLAY_QUEUE") continue;
+    picks.push(el);
+  }
+  const bar = ymById("PLAYERBAR_DESKTOP_PLAY_QUEUE_BUTTON");
+  if (bar) picks.push(bar);
+  return picks.find((el) => ymVisible(el)) || picks[0] || null;
+}
+if (queueOpen()) {
+  for (let attempt = 0; attempt < 4 && queueOpen(); attempt++) {
+    const toggle = queueToggle();
+    if (!toggle) break;
+    ymClick(toggle);
+    await ymSleep(200);
+  }
+}
+if (!onArtist()) await ymInAppGo(primaryPath());
+function badHost(el) {
+  if (!el || !el.closest) return true;
+  if (el.closest('[data-test-id="TRACK_PLAYLIST"], [data-test-id="TRACK_ALBUM"], [data-test-id="SEARCH_TRACK"], [data-test-id="PLAY_QUEUE"], [data-test-id="PLAYERBAR_DESKTOP"], [data-test-id="FULLSCREEN_PLAYER_MODAL"], [data-test-id="VIBE_PLAYERBAR"], [data-test-id="FAMILIAR_YOU_SCROLLABLE_CONTENT_VIBE"]')) return true;
+  if (el.closest('a[href*="albumId="], a[href*="/album/"]')) return true;
+  const id = (el.getAttribute("data-test-id") || "").toUpperCase();
+  const label = (el.getAttribute("aria-label") || "").toLowerCase();
+  const text = ymText(el).toLowerCase();
+  if (id.includes("TRAILER") || label.includes("трейлер") || text.includes("трейлер")) return true;
+  return false;
+}
+function headerScopes() {
+  const scopes = [];
+  for (const id of ["ENTITY_HEADER", "BASE_PAGE_HEADER_CONTROLS", "ARTIST_HEADER", "ARTIST_PAGE", "BLOCK_HEADER"]) {
+    const el = ymById(id);
+    if (el) scopes.push(el);
+  }
+  return scopes;
+}
+function headerAlreadyPlaying() {
+  for (const area of headerScopes()) {
+    for (const pause of area.querySelectorAll('[data-test-id="PAUSE_BUTTON"]')) {
+      if (!badHost(pause) && ymVisible(pause, 8) && ymTransportPlaying()) return true;
+    }
+  }
+  return false;
+}
+function findHeaderPlay() {
+  for (const area of headerScopes()) {
+    const withCover = area.querySelector('[data-test-id="PLAY_BUTTON_WITH_COVER"]');
+    if (withCover && !badHost(withCover)) {
+      const inner = withCover.querySelector('[data-test-id="PLAY_BUTTON"]');
+      if (inner && !badHost(inner) && ymVisible(inner, 8)) return inner;
+      if (ymVisible(withCover, 8)) return withCover;
+    }
+    for (const button of area.querySelectorAll('[data-test-id="PLAY_BUTTON"]')) {
+      if (!badHost(button) && ymVisible(button, 8)) return button;
+    }
+    for (const button of area.querySelectorAll("button")) {
+      const label = button.getAttribute("aria-label") || "";
+      if ((label.includes("Слушать") || label.includes("Воспроизведение")) && !badHost(button) && ymVisible(button, 8)) return button;
+    }
+  }
+  return null;
+}
+for (let step = 0; step < 50; step++) {
+  await ymSleep(200);
+  if (step === 8 && !onArtist()) {
+    const nextPath = location.protocol === "music-application:" ? primaryPath() : altPath();
+    await ymInAppGo(nextPath);
+  }
+  if (step === 18 && !onArtist()) await ymInAppGo(primaryPath());
+  if (!onArtist()) continue;
+  if (headerAlreadyPlaying()) return "playing";
+  const button = findHeaderPlay();
+  if (!button) continue;
+  ymClick(button);
+  for (let check = 0; check < 10; check++) {
+    await ymSleep(150);
+    if (ymTransportPlaying()) return "playing";
+  }
+}
+return "fail";
+""",
+        ARTIST_ID=artist_id,
+    )
+
+
+def album_play_script(album_id: int) -> str:
+    return fill(
+        r"""
+const albumId = String(__ALBUM_ID__);
+function primaryPath() {
+  return "/album?albumId=" + encodeURIComponent(albumId);
+}
+function altPath() {
+  return "/album/" + encodeURIComponent(albumId);
+}
+function onAlbum() {
+  try {
+    const url = new URL(location.href);
+    if (url.searchParams.get("trackId")) return false;
+    if (url.searchParams.get("albumId") === albumId) return true;
+    const parts = url.pathname.split("/").filter(Boolean);
+    const at = parts.lastIndexOf("album");
+    return at >= 0 && parts[at + 1] === albumId && !parts.includes("track");
+  } catch (error) { return false; }
+}
+function queueOpen() {
+  const panel = ymById("PLAY_QUEUE");
+  if (!panel) return false;
+  const rect = panel.getBoundingClientRect();
+  const style = getComputedStyle(panel);
+  return rect.width >= 2 && rect.height >= 2 && style.display !== "none" && style.visibility !== "hidden";
+}
+function queueToggle() {
+  const panel = ymById("PLAY_QUEUE");
+  const modal = ymById("FULLSCREEN_PLAYER_MODAL");
+  const picks = [];
+  if (panel && modal && modal.contains(panel)) {
+    const full = ymById("FULLSCREEN_PLAYER_QUEUE_BUTTON");
+    if (full) picks.push(full);
+  }
+  for (const el of document.querySelectorAll("button, [role='button']")) {
+    const id = el.getAttribute("data-test-id") || "";
+    if (id.indexOf("PLAY_QUEUE") === -1 || id === "PLAY_QUEUE") continue;
+    picks.push(el);
+  }
+  const bar = ymById("PLAYERBAR_DESKTOP_PLAY_QUEUE_BUTTON");
+  if (bar) picks.push(bar);
+  return picks.find((el) => ymVisible(el)) || picks[0] || null;
+}
+if (queueOpen()) {
+  for (let attempt = 0; attempt < 4 && queueOpen(); attempt++) {
+    const toggle = queueToggle();
+    if (!toggle) break;
+    ymClick(toggle);
+    await ymSleep(200);
+  }
+}
+if (!onAlbum()) await ymInAppGo(primaryPath());
+function badHost(el) {
+  if (!el || !el.closest) return true;
+  if (el.closest('[data-test-id="TRACK_PLAYLIST"], [data-test-id="TRACK_ALBUM"], [data-test-id="SEARCH_TRACK"], [data-test-id="PLAY_QUEUE"], [data-test-id="PLAYERBAR_DESKTOP"], [data-test-id="FULLSCREEN_PLAYER_MODAL"], [data-test-id="VIBE_PLAYERBAR"]')) return true;
+  const id = (el.getAttribute("data-test-id") || "").toUpperCase();
+  const label = (el.getAttribute("aria-label") || "").toLowerCase();
+  const text = ymText(el).toLowerCase();
+  if (id.includes("TRAILER") || label.includes("трейлер") || text.includes("трейлер")) return true;
+  return false;
+}
+function headerScopes() {
+  const scopes = [];
+  for (const id of ["ENTITY_HEADER", "BASE_PAGE_HEADER_CONTROLS", "ALBUM_PAGE", "BLOCK_HEADER"]) {
+    const el = ymById(id);
+    if (el) scopes.push(el);
+  }
+  return scopes;
+}
+function headerAlreadyPlaying() {
+  for (const area of headerScopes()) {
+    for (const pause of area.querySelectorAll('[data-test-id="PAUSE_BUTTON"]')) {
+      if (!badHost(pause) && ymVisible(pause, 8) && ymTransportPlaying()) return true;
+    }
+  }
+  return false;
+}
+function findHeaderPlay() {
+  for (const area of headerScopes()) {
+    const withCover = area.querySelector('[data-test-id="PLAY_BUTTON_WITH_COVER"]');
+    if (withCover && !badHost(withCover)) {
+      const inner = withCover.querySelector('[data-test-id="PLAY_BUTTON"]');
+      if (inner && !badHost(inner) && ymVisible(inner, 8)) return inner;
+      if (ymVisible(withCover, 8)) return withCover;
+    }
+    for (const button of area.querySelectorAll('[data-test-id="PLAY_BUTTON"]')) {
+      if (!badHost(button) && ymVisible(button, 8)) return button;
+    }
+    for (const button of area.querySelectorAll("button")) {
+      const label = button.getAttribute("aria-label") || "";
+      if ((label.includes("Слушать") || label.includes("Воспроизведение")) && !badHost(button) && ymVisible(button, 8)) return button;
+    }
+  }
+  return null;
+}
+for (let step = 0; step < 50; step++) {
+  await ymSleep(200);
+  if (step === 8 && !onAlbum()) {
+    const nextPath = location.protocol === "music-application:" ? primaryPath() : altPath();
+    await ymInAppGo(nextPath);
+  }
+  if (step === 18 && !onAlbum()) await ymInAppGo(primaryPath());
+  if (!onAlbum()) continue;
+  if (headerAlreadyPlaying()) return "playing";
+  const button = findHeaderPlay();
+  if (!button) continue;
+  ymClick(button);
+  for (let check = 0; check < 10; check++) {
+    await ymSleep(150);
+    if (ymTransportPlaying()) return "playing";
+  }
+}
+return "fail";
+""",
+        ALBUM_ID=album_id,
+    )
+
+
+def artist_row_script(
+    artist_id: int,
+    mode: str | None,
+    track_id: int,
+    album_id: int | None,
+    index: int | None,
+    action: str,
+) -> str:
+    return fill(
+        r"""
+const artistId = String(__ARTIST_ID__);
+const mode = __MODE__ || "popular";
+const isFamiliar = mode === "familiar" || mode === "familiar_collection" || mode === "familiar_wave";
+const trackId = String(__TRACK_ID__);
+const wanted = Number(trackId);
+const albumId = __ALBUM_ID__ == null ? "" : String(__ALBUM_ID__);
+const index = __INDEX__;
+const action = __ACTION__;
+function targetPath() {
+  if (mode === "tracks") return "/artist/tracks?artistId=" + encodeURIComponent(artistId);
+  if (mode === "familiar_collection") return "/artist/familiar?artistId=" + encodeURIComponent(artistId) + "&tab=collection";
+  if (mode === "familiar_wave") return "/artist/familiar?artistId=" + encodeURIComponent(artistId) + "&tab=vibe";
+  if (mode === "familiar") return "/artist/familiar?artistId=" + encodeURIComponent(artistId);
+  return "/artist?artistId=" + encodeURIComponent(artistId);
+}
+function onContext() {
+  try {
+    const url = new URL(location.href);
+    const matchesId = url.searchParams.get("artistId") === artistId || url.pathname.split("/").includes(artistId);
+    if (!matchesId) return false;
+    if (mode === "tracks") return url.pathname.includes("/tracks");
+    if (mode === "familiar_wave") return url.pathname.includes("/familiar") && url.searchParams.get("tab") === "vibe";
+    if (mode === "familiar_collection") return url.pathname.includes("/familiar") && url.searchParams.get("tab") !== "vibe";
+    if (mode === "familiar") return url.pathname.includes("/familiar");
+    return !url.pathname.includes("/tracks") && !url.pathname.includes("/familiar");
+  } catch (error) { return false; }
+}
+function pageRoot() {
+  if (mode === "tracks") return ymById("ARTIST_TRACKS_PAGE") || ymById("ARTIST_PAGE") || document.querySelector("main");
+  if (mode === "familiar_wave") return ymById("FAMILIAR_YOU_SCROLLABLE_CONTENT_VIBE") || ymById("ARTIST_FAMILIAR_PAGE") || ymById("ARTIST_PAGE") || document.querySelector("main");
+  if (mode === "familiar_collection") return ymById("FAMILIAR_YOU_SCROLLABLE_CONTENT_COLLECTION") || ymById("ARTIST_FAMILIAR_PAGE") || ymById("ARTIST_PAGE") || document.querySelector("main");
+  if (mode === "familiar") return ymById("ARTIST_FAMILIAR_PAGE") || ymById("ARTIST_PAGE") || document.querySelector("main");
+  return ymById("ARTIST_PAGE") || document.querySelector("main");
+}
+let opened = false;
+function retreat() {
+  if (opened && action !== "play") history.back();
+}
+function queueOpen() {
+  const panel = ymById("PLAY_QUEUE");
+  if (!panel) return false;
+  const rect = panel.getBoundingClientRect();
+  const style = getComputedStyle(panel);
+  return rect.width >= 2 && rect.height >= 2 && style.display !== "none" && style.visibility !== "hidden";
+}
+function queueToggle() {
+  const panel = ymById("PLAY_QUEUE");
+  const modal = ymById("FULLSCREEN_PLAYER_MODAL");
+  const picks = [];
+  if (panel && modal && modal.contains(panel)) {
+    const full = ymById("FULLSCREEN_PLAYER_QUEUE_BUTTON");
+    if (full) picks.push(full);
+  }
+  for (const el of document.querySelectorAll("button, [role='button']")) {
+    const id = el.getAttribute("data-test-id") || "";
+    if (id.indexOf("PLAY_QUEUE") === -1 || id === "PLAY_QUEUE") continue;
+    picks.push(el);
+  }
+  const bar = ymById("PLAYERBAR_DESKTOP_PLAY_QUEUE_BUTTON");
+  if (bar) picks.push(bar);
+  return picks.find((el) => ymVisible(el)) || picks[0] || null;
+}
+if (queueOpen()) {
+  for (let attempt = 0; attempt < 4 && queueOpen(); attempt++) {
+    const toggle = queueToggle();
+    if (!toggle) break;
+    ymClick(toggle);
+    await ymSleep(200);
+  }
+}
+const wasHere = onContext();
+await ymInAppGo(targetPath());
+opened = !wasHere;
+let ready = false;
+for (let attempt = 0; attempt < 36; attempt++) {
+  if (onContext() && pageRoot()) { ready = true; break; }
+  if (attempt === 8 || attempt === 18) await ymInAppGo(targetPath());
+  await ymSleep(150);
+}
+if (!ready) { retreat(); return "fail"; }
+function numericId(anchor) {
+  if (!anchor) return null;
+  let url;
+  try { url = new URL(anchor.getAttribute("href") || anchor.href, location.href); }
+  catch (error) { return null; }
+  const raw = url.searchParams.get("trackId");
+  if (raw && /^\d+$/.test(raw)) return Number(raw);
+  const parts = url.pathname.split("/");
+  const at = parts.lastIndexOf("track");
+  if (at >= 0 && /^\d+$/.test(parts[at + 1] || "")) return Number(parts[at + 1]);
+  return null;
+}
+function albumOf(anchor) {
+  if (!anchor) return "";
+  let url;
+  try { url = new URL(anchor.getAttribute("href") || anchor.href, location.href); }
+  catch (error) { return ""; }
+  const raw = url.searchParams.get("albumId");
+  if (raw && /^\d+$/.test(raw)) return raw;
+  const parts = url.pathname.split("/");
+  const at = parts.lastIndexOf("album");
+  if (at >= 0 && /^\d+$/.test(parts[at + 1] || "")) return parts[at + 1];
+  return "";
+}
+function forbidden(node) {
+  if (!node || !node.closest) return true;
+  if (node.closest('[data-test-id="PLAY_QUEUE"], [data-test-id="PLAYERBAR_DESKTOP"], [data-test-id="FULLSCREEN_PLAYER_MODAL"], [data-test-id="VIBE_PLAYERBAR"]')) return true;
+  if (!isFamiliar && node.closest('[data-test-id="ARTIST_FAMILIAR_PAGE"], [data-test-id="FAMILIAR_YOU_SCROLLABLE_CONTENT_VIBE"], [data-test-id="FAMILIAR_YOU_SCROLLABLE_CONTENT_COLLECTION"]')) return true;
+  if (isFamiliar && node.closest('[data-test-id="FAMILIAR_YOU_SECTION_ALBUM"]')) return true;
+  if (mode === "familiar_collection" && node.closest('[data-test-id="FAMILIAR_YOU_SCROLLABLE_CONTENT_VIBE"]')) return true;
+  if (mode === "familiar_wave" && node.closest('[data-test-id="FAMILIAR_YOU_SCROLLABLE_CONTENT_COLLECTION"]')) return true;
+  return false;
+}
+function rowTrackId(candidate) {
+  const page = pageRoot();
+  if (!candidate || !page || !page.contains(candidate) || forbidden(candidate)) return null;
+  for (const anchor of candidate.querySelectorAll('a[href*="trackId="], a[href*="/track/"]')) {
+    const id = numericId(anchor);
+    if (id != null) return id;
+  }
+  return null;
+}
+function findRow() {
+  const page = pageRoot();
+  if (!page) return null;
+  let fallbackRow = null;
+  for (const anchor of page.querySelectorAll('a[href*="trackId="], a[href*="/track/"]')) {
+    if (forbidden(anchor)) continue;
+    if (numericId(anchor) !== wanted) continue;
+    const row = anchor.closest('[data-test-id="TRACK_PLAYLIST"], [data-test-id="TRACK_ALBUM"]');
+    if (!row || !page.contains(row) || forbidden(row) || rowTrackId(row) !== wanted) continue;
+    const album = albumOf(anchor);
+    if (!albumId || !album || album === albumId) return row;
+    if (!fallbackRow) fallbackRow = row;
+  }
+  return fallbackRow;
+}
+function findScroller() {
+  const page = pageRoot();
+  if (!page) return null;
+  const virtuoso = page.querySelector('[data-test-id="virtuoso-scroller"]');
+  if (virtuoso) return virtuoso;
+  const sample = page.querySelector('[data-test-id="TRACK_PLAYLIST"], [data-test-id="TRACK_ALBUM"]');
+  let cur = sample ? sample.parentElement : page;
+  while (cur && cur !== document.body) {
+    const style = getComputedStyle(cur);
+    const oy = style.overflowY;
+    if ((oy === "auto" || oy === "scroll" || oy === "overlay") && cur.scrollHeight > cur.clientHeight + 4) return cur;
+    cur = cur.parentElement;
+  }
+  return null;
+}
+let row = null;
+let hinted = false;
+for (let step = 0; step < 30; step++) {
+  row = findRow();
+  if (row) break;
+  const scroller = findScroller();
+  if (!scroller) { await ymSleep(180); continue; }
+  const sample = document.querySelector('[data-test-id="TRACK_PLAYLIST"], [data-test-id="TRACK_ALBUM"]');
+  const height = sample && sample.getBoundingClientRect().height > 20 ? sample.getBoundingClientRect().height : 56;
+  if (!hinted && index != null && index > 0) {
+    scroller.scrollTop = Math.max(0, (index - 2) * height);
+    hinted = true;
+  } else {
+    scroller.scrollTop = scroller.scrollTop + Math.max(height * 8, scroller.clientHeight * 0.72);
+  }
+  scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+  await ymSleep(200);
+}
+if (!row || rowTrackId(row) !== wanted) { retreat(); return "fail"; }
+if (row.scrollIntoView) row.scrollIntoView({ block: "center" });
+await ymSleep(140);
+if (action === "play") {
+  const pauseInRow = row.querySelector('[data-test-id="PAUSE_BUTTON"]');
+  if (pauseInRow && ymVisible(pauseInRow) && ymTransportPlaying()) return "playing";
+  let button = null;
+  for (const candidate of row.querySelectorAll('[data-test-id="PLAY_BUTTON"], button')) {
+    if (!ymVisible(candidate)) continue;
+    const id = candidate.getAttribute("data-test-id") || "";
+    const label = candidate.getAttribute("aria-label") || "";
+    if (id === "PLAY_BUTTON" || label.includes("Слушать") || label.includes("Воспроизведение")) { button = candidate; break; }
+  }
+  if (!button || forbidden(button) || !row.contains(button) || rowTrackId(row) !== wanted) { retreat(); return "fail"; }
+  ymClick(button);
+  for (let check = 0; check < 8; check++) {
+    await ymSleep(140);
+    const bar = ymById("PLAYERBAR_DESKTOP") || document;
+    const link = bar.querySelector('a[href*="trackId=' + trackId + '"]');
+    const pause = bar.querySelector('[data-test-id="PAUSE_BUTTON"]') || bar.querySelector('[aria-label="Пауза"]');
+    if ((link && pause && ymVisible(pause)) || ymTransportPlaying()) return "playing";
+  }
+  retreat();
+  return "fail";
+}
+let seenMenus = new Set();
+function nearestMenu(menus) {
+  const box = row.getBoundingClientRect();
+  const ax = box.left + box.width / 2;
+  const ay = box.top + box.height / 2;
+  let best = null;
+  let bestDist = Infinity;
+  for (const menu of menus) {
+    if (forbidden(menu) || !ymVisible(menu)) continue;
+    const rect = menu.getBoundingClientRect();
+    const dx = (rect.left + rect.width / 2) - ax;
+    const dy = (rect.top + rect.height / 2) - ay;
+    const dist = dx * dx + dy * dy;
+    if (dist < bestDist) { bestDist = dist; best = menu; }
+  }
+  return best;
+}
+function menuItem() {
+  if (rowTrackId(row) !== wanted) return null;
+  const all = Array.from(document.querySelectorAll('[data-test-id="TRACK_CONTEXT_MENU"]')).filter((menu) => !forbidden(menu));
+  const fresh = all.filter((menu) => !seenMenus.has(menu) && ymVisible(menu));
+  const menu = fresh.length ? nearestMenu(fresh) : nearestMenu(all.filter((m) => ymVisible(m)));
+  if (!menu || forbidden(menu)) return null;
+  if (action === "next") {
+    const found = ymById("TRACK_CONTEXT_MENU_PLAY_NEXT_BUTTON", menu) || ymById("TRACK_CONTEXT_MENU_PLAY_NEXT", menu);
+    return found && menu.contains(found) && !forbidden(found) ? found : null;
+  }
+  const found = ymById("TRACK_CONTEXT_MENU_PLAY_LAST_BUTTON", menu)
+    || ymById("TRACK_CONTEXT_MENU_ADD_TO_QUEUE", menu)
+    || ymById("TRACK_CONTEXT_MENU_ADD_TO_QUEUE_BUTTON", menu)
+    || ymById("TRACK_CONTEXT_MENU_QUEUE", menu)
+    || menu.querySelector('[data-test-id*="ADD_TO_QUEUE"]');
+  return found && menu.contains(found) && !forbidden(found) ? found : null;
+}
+function openRowMenu() {
+  if (rowTrackId(row) !== wanted) return false;
+  row.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+  row.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+  let menuButton = null;
+  for (const id of ["TRACK_CONTEXT_MENU_BUTTON", "TRACK_PLAYLIST_CONTEXT_MENU_BUTTON", "CONTEXT_MENU_BUTTON"]) {
+    const found = ymById(id, row);
+    if (found && row.contains(found) && !forbidden(found)) { menuButton = found; break; }
+  }
+  if (!menuButton) return false;
+  seenMenus = new Set(document.querySelectorAll('[data-test-id="TRACK_CONTEXT_MENU"]'));
+  ymClick(menuButton);
+  return true;
+}
+let item = null;
+for (let attempt = 0; attempt < 3 && !item; attempt++) {
+  ymPressEscape();
+  await ymSleep(80);
+  if (!openRowMenu()) continue;
+  await ymSleep(450);
+  item = menuItem();
+}
+if (!item || rowTrackId(row) !== wanted || forbidden(item)) { ymPressEscape(); retreat(); return "no_menu"; }
+ymClick(item);
+await ymSleep(250);
+ymPressEscape();
+retreat();
+return "ok";
+""",
+        ARTIST_ID=artist_id,
+        MODE=mode,
+        TRACK_ID=track_id,
+        ALBUM_ID=album_id,
+        INDEX=index,
+        ACTION=action,
+    )
+
+
+def album_row_script(
+    album_id: int,
+    track_id: int,
+    index: int | None,
+    action: str,
+) -> str:
+    return fill(
+        r"""
+const albumId = String(__ALBUM_ID__);
+const trackId = String(__TRACK_ID__);
+const wanted = Number(trackId);
+const index = __INDEX__;
+const action = __ACTION__;
+function albumPath() {
+  return "/album?albumId=" + encodeURIComponent(albumId);
+}
+function onAlbum() {
+  try {
+    const url = new URL(location.href);
+    if (url.searchParams.get("trackId")) return false;
+    if (url.searchParams.get("albumId") === albumId) return true;
+    const parts = url.pathname.split("/").filter(Boolean);
+    const at = parts.lastIndexOf("album");
+    return at >= 0 && parts[at + 1] === albumId && !parts.includes("track");
+  } catch (error) { return false; }
+}
+function pageRoot() {
+  return ymById("ALBUM_PAGE") || document.querySelector("main");
+}
+let opened = false;
+function retreat() {
+  if (opened && action !== "play") history.back();
+}
+function queueOpen() {
+  const panel = ymById("PLAY_QUEUE");
+  if (!panel) return false;
+  const rect = panel.getBoundingClientRect();
+  const style = getComputedStyle(panel);
+  return rect.width >= 2 && rect.height >= 2 && style.display !== "none" && style.visibility !== "hidden";
+}
+function queueToggle() {
+  const panel = ymById("PLAY_QUEUE");
+  const modal = ymById("FULLSCREEN_PLAYER_MODAL");
+  const picks = [];
+  if (panel && modal && modal.contains(panel)) {
+    const full = ymById("FULLSCREEN_PLAYER_QUEUE_BUTTON");
+    if (full) picks.push(full);
+  }
+  for (const el of document.querySelectorAll("button, [role='button']")) {
+    const id = el.getAttribute("data-test-id") || "";
+    if (id.indexOf("PLAY_QUEUE") === -1 || id === "PLAY_QUEUE") continue;
+    picks.push(el);
+  }
+  const bar = ymById("PLAYERBAR_DESKTOP_PLAY_QUEUE_BUTTON");
+  if (bar) picks.push(bar);
+  return picks.find((el) => ymVisible(el)) || picks[0] || null;
+}
+if (queueOpen()) {
+  for (let attempt = 0; attempt < 4 && queueOpen(); attempt++) {
+    const toggle = queueToggle();
+    if (!toggle) break;
+    ymClick(toggle);
+    await ymSleep(200);
+  }
+}
+const wasHere = onAlbum();
+await ymInAppGo(albumPath());
+opened = !wasHere;
+let ready = false;
+for (let attempt = 0; attempt < 36; attempt++) {
+  if (onAlbum() && pageRoot()) { ready = true; break; }
+  if (attempt === 8 || attempt === 18) await ymInAppGo(albumPath());
+  await ymSleep(150);
+}
+if (!ready) { retreat(); return "fail"; }
+function numericId(anchor) {
+  if (!anchor) return null;
+  let url;
+  try { url = new URL(anchor.getAttribute("href") || anchor.href, location.href); }
+  catch (error) { return null; }
+  const raw = url.searchParams.get("trackId");
+  if (raw && /^\d+$/.test(raw)) return Number(raw);
+  const parts = url.pathname.split("/");
+  const at = parts.lastIndexOf("track");
+  if (at >= 0 && /^\d+$/.test(parts[at + 1] || "")) return Number(parts[at + 1]);
+  return null;
+}
+function forbidden(node) {
+  return !!(node && node.closest && node.closest('[data-test-id="PLAY_QUEUE"], [data-test-id="PLAYERBAR_DESKTOP"], [data-test-id="FULLSCREEN_PLAYER_MODAL"], [data-test-id="VIBE_PLAYERBAR"]'));
+}
+function rowTrackId(candidate) {
+  const page = pageRoot();
+  if (!candidate || !page || !page.contains(candidate) || forbidden(candidate)) return null;
+  for (const anchor of candidate.querySelectorAll('a[href*="trackId="], a[href*="/track/"]')) {
+    const id = numericId(anchor);
+    if (id != null) return id;
+  }
+  return null;
+}
+function findRow() {
+  const page = pageRoot();
+  if (!page) return null;
+  for (const anchor of page.querySelectorAll('a[href*="trackId="], a[href*="/track/"]')) {
+    if (forbidden(anchor)) continue;
+    if (numericId(anchor) !== wanted) continue;
+    const row = anchor.closest('[data-test-id="TRACK_ALBUM"], [data-test-id="TRACK_PLAYLIST"]');
+    if (row && page.contains(row) && !forbidden(row) && rowTrackId(row) === wanted) return row;
+  }
+  return null;
+}
+function findScroller() {
+  const page = pageRoot();
+  if (!page) return null;
+  const virtuoso = page.querySelector('[data-test-id="virtuoso-scroller"]');
+  if (virtuoso) return virtuoso;
+  const sample = page.querySelector('[data-test-id="TRACK_ALBUM"], [data-test-id="TRACK_PLAYLIST"]');
+  let cur = sample ? sample.parentElement : page;
+  while (cur && cur !== document.body) {
+    const style = getComputedStyle(cur);
+    const oy = style.overflowY;
+    if ((oy === "auto" || oy === "scroll" || oy === "overlay") && cur.scrollHeight > cur.clientHeight + 4) return cur;
+    cur = cur.parentElement;
+  }
+  return null;
+}
+let row = null;
+let hinted = false;
+for (let step = 0; step < 26; step++) {
+  row = findRow();
+  if (row) break;
+  const scroller = findScroller();
+  if (!scroller) { await ymSleep(180); continue; }
+  const sample = document.querySelector('[data-test-id="TRACK_ALBUM"], [data-test-id="TRACK_PLAYLIST"]');
+  const height = sample && sample.getBoundingClientRect().height > 20 ? sample.getBoundingClientRect().height : 56;
+  if (!hinted && index != null && index > 0) {
+    scroller.scrollTop = Math.max(0, (index - 2) * height);
+    hinted = true;
+  } else {
+    scroller.scrollTop = scroller.scrollTop + Math.max(height * 8, scroller.clientHeight * 0.72);
+  }
+  scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+  await ymSleep(200);
+}
+if (!row || rowTrackId(row) !== wanted) { retreat(); return "fail"; }
+if (row.scrollIntoView) row.scrollIntoView({ block: "center" });
+await ymSleep(140);
+if (action === "play") {
+  const pauseInRow = row.querySelector('[data-test-id="PAUSE_BUTTON"]');
+  if (pauseInRow && ymVisible(pauseInRow) && ymTransportPlaying()) return "playing";
+  let button = null;
+  for (const candidate of row.querySelectorAll('[data-test-id="PLAY_BUTTON"], button')) {
+    if (!ymVisible(candidate)) continue;
+    const id = candidate.getAttribute("data-test-id") || "";
+    const label = candidate.getAttribute("aria-label") || "";
+    if (id === "PLAY_BUTTON" || label.includes("Слушать") || label.includes("Воспроизведение")) { button = candidate; break; }
+  }
+  if (!button || forbidden(button) || !row.contains(button) || rowTrackId(row) !== wanted) { retreat(); return "fail"; }
+  ymClick(button);
+  for (let check = 0; check < 8; check++) {
+    await ymSleep(140);
+    const bar = ymById("PLAYERBAR_DESKTOP") || document;
+    const link = bar.querySelector('a[href*="trackId=' + trackId + '"]');
+    const pause = bar.querySelector('[data-test-id="PAUSE_BUTTON"]') || bar.querySelector('[aria-label="Пауза"]');
+    if ((link && pause && ymVisible(pause)) || ymTransportPlaying()) return "playing";
+  }
+  retreat();
+  return "fail";
+}
+let seenMenus = new Set();
+function nearestMenu(menus) {
+  const box = row.getBoundingClientRect();
+  const ax = box.left + box.width / 2;
+  const ay = box.top + box.height / 2;
+  let best = null;
+  let bestDist = Infinity;
+  for (const menu of menus) {
+    if (forbidden(menu) || !ymVisible(menu)) continue;
+    const rect = menu.getBoundingClientRect();
+    const dx = (rect.left + rect.width / 2) - ax;
+    const dy = (rect.top + rect.height / 2) - ay;
+    const dist = dx * dx + dy * dy;
+    if (dist < bestDist) { bestDist = dist; best = menu; }
+  }
+  return best;
+}
+function menuItem() {
+  if (rowTrackId(row) !== wanted) return null;
+  const all = Array.from(document.querySelectorAll('[data-test-id="TRACK_CONTEXT_MENU"]')).filter((menu) => !forbidden(menu));
+  const fresh = all.filter((menu) => !seenMenus.has(menu) && ymVisible(menu));
+  const menu = fresh.length ? nearestMenu(fresh) : nearestMenu(all.filter((m) => ymVisible(m)));
+  if (!menu || forbidden(menu)) return null;
+  if (action === "next") {
+    const found = ymById("TRACK_CONTEXT_MENU_PLAY_NEXT_BUTTON", menu) || ymById("TRACK_CONTEXT_MENU_PLAY_NEXT", menu);
+    return found && menu.contains(found) && !forbidden(found) ? found : null;
+  }
+  const found = ymById("TRACK_CONTEXT_MENU_PLAY_LAST_BUTTON", menu)
+    || ymById("TRACK_CONTEXT_MENU_ADD_TO_QUEUE", menu)
+    || ymById("TRACK_CONTEXT_MENU_ADD_TO_QUEUE_BUTTON", menu)
+    || ymById("TRACK_CONTEXT_MENU_QUEUE", menu)
+    || menu.querySelector('[data-test-id*="ADD_TO_QUEUE"]');
+  return found && menu.contains(found) && !forbidden(found) ? found : null;
+}
+function openRowMenu() {
+  if (rowTrackId(row) !== wanted) return false;
+  row.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+  row.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+  let menuButton = null;
+  for (const id of ["TRACK_CONTEXT_MENU_BUTTON", "TRACK_PLAYLIST_CONTEXT_MENU_BUTTON", "CONTEXT_MENU_BUTTON"]) {
+    const found = ymById(id, row);
+    if (found && row.contains(found) && !forbidden(found)) { menuButton = found; break; }
+  }
+  if (!menuButton) return false;
+  seenMenus = new Set(document.querySelectorAll('[data-test-id="TRACK_CONTEXT_MENU"]'));
+  ymClick(menuButton);
+  return true;
+}
+let item = null;
+for (let attempt = 0; attempt < 3 && !item; attempt++) {
+  ymPressEscape();
+  await ymSleep(80);
+  if (!openRowMenu()) continue;
+  await ymSleep(450);
+  item = menuItem();
+}
+if (!item || rowTrackId(row) !== wanted || forbidden(item)) { ymPressEscape(); retreat(); return "no_menu"; }
+ymClick(item);
+await ymSleep(250);
+ymPressEscape();
+retreat();
+return "ok";
+""",
+        ALBUM_ID=album_id,
+        TRACK_ID=track_id,
+        INDEX=index,
+        ACTION=action,
     )

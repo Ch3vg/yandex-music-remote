@@ -12,9 +12,10 @@
   padding-bottom: 16px;
 }
 .home-section-title {
-  font-size: 1.35rem;
+  font-family: var(--font-heading);
+  font-size: 1.32rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   margin: 8px 0 12px;
 }
 .likes-hero {
@@ -51,15 +52,17 @@
 }
 .likes-hero-body { flex: 1; min-width: 0; }
 .likes-hero-title {
-  font-size: 1.65rem;
+  font-family: var(--font-heading);
+  font-size: 1.6rem;
   font-weight: 700;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
   line-height: 1.15;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 .likes-hero-title .chev {
+  font-family: var(--font-text);
   opacity: 0.45;
   font-weight: 400;
   font-size: 1.35rem;

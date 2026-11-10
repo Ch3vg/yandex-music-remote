@@ -46,6 +46,7 @@ class Cover:
 class Artist:
     name: str
     id: int | None = None
+    cover: Cover | None = None
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,15 @@ class Album:
     id: int | None
     title: str
     cover: Cover | None = None
+    year: int | None = None
+    album_type: str | None = None
+    version: str | None = None
+    track_count: int = 0
+    artists: tuple[Artist, ...] = ()
+    tracks: tuple[Track, ...] = ()
+
+    def artist_line(self) -> str:
+        return join_artists(tuple(artist.name for artist in self.artists))
 
 
 @dataclass(frozen=True)
@@ -91,3 +101,54 @@ class Playlist:
     @property
     def is_likes(self) -> bool:
         return self.title == "Мне нравится" or self.kind == 3
+
+
+@dataclass(frozen=True)
+class ArtistDetail:
+    id: int
+    name: str
+    cover: Cover | None = None
+    ambient_color: str | None = None
+    total_tracks: int = 0
+    total_albums: int = 0
+    popular_tracks: tuple[Track, ...] = ()
+    familiar_total: int = 0
+    albums: tuple[Album, ...] = ()
+    singles: tuple[Album, ...] = ()
+
+
+@dataclass(frozen=True)
+class FamiliarTracks:
+    collection: tuple[Track, ...] = ()
+    wave: tuple[Track, ...] = ()
+
+    @property
+    def total(self) -> int:
+        return len(self.all_tracks())
+
+    def all_tracks(self) -> tuple[Track, ...]:
+        ordered: list[Track] = []
+        seen: set[int] = set()
+        for track in (*self.collection, *self.wave):
+            if track.id is not None:
+                if track.id in seen:
+                    continue
+                seen.add(track.id)
+            ordered.append(track)
+        return tuple(ordered)
+
+
+@dataclass(frozen=True)
+class TrackPage:
+    tracks: tuple[Track, ...] = ()
+    page: int = 0
+    page_size: int = 50
+    total: int = 0
+    has_more: bool = False
+
+
+@dataclass(frozen=True)
+class SearchView:
+    artists: tuple[Artist, ...] = ()
+    tracks: tuple[Track, ...] = ()
+

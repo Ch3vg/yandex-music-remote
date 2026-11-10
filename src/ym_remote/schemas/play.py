@@ -18,6 +18,9 @@ class PlayCommand(BaseModel):
     playlist_uid: int | None = None
     playlist_uuid: str | None = None
     playlist_track_index: int | None = None
+    artist_id: int | None = None
+    artist_mode: str | None = None
+    context_album_id: int | None = None
 
     def to_request(self) -> PlayRequest:
         return PlayRequest(
@@ -29,4 +32,11 @@ class PlayCommand(BaseModel):
             playlist_uid=self.playlist_uid,
             playlist_uuid=self.playlist_uuid or None,
             playlist_track_index=self.playlist_track_index,
+            artist_id=self.artist_id if self.artist_id and self.artist_id > 0 else None,
+            artist_mode=self.artist_mode or None,
+            context_album_id=(
+                self.context_album_id
+                if self.context_album_id and self.context_album_id > 0
+                else None
+            ),
         )
