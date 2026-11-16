@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
-import type { QueueItem, QueuePayload } from '../api/types';
+import type { CatalogTrack, QueueItem, QueuePayload } from '../api/types';
 import { send } from '../api/ws';
 import { usePlaybackSelector } from '../store/playback';
 import './QueueSheet.css';
@@ -13,16 +13,39 @@ function scrollQueueToDefault(container: HTMLElement): void {
   container.scrollTop = Math.max(0, top - pad);
 }
 
+function Dots() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.8" />
+      <circle cx="12" cy="12" r="1.8" />
+      <circle cx="19" cy="12" r="1.8" />
+    </svg>
+  );
+}
+
+function queueItemToCatalogTrack(item: QueueItem): CatalogTrack {
+  return {
+    id: item.track_id != null ? item.track_id : Number.NaN,
+    album_id: item.album_id,
+    title: item.title,
+    artist: item.artist,
+    artists: item.artists,
+    cover_url: item.cover,
+  };
+}
+
 function QueueTrack({
   item,
   current,
   anchor,
   onPick,
+  onMenu,
 }: {
   item: QueueItem;
   current: boolean;
   anchor: boolean;
   onPick: (item: QueueItem) => void;
+  onMenu: (track: CatalogTrack) => void;
 }) {
   return (
     <li
@@ -35,11 +58,30 @@ function QueueTrack({
         <span className="title">{`${current ? '▶ ' : ''}${item.title || ''}`}</span>
         {item.artist ? <span className="artist">{item.artist}</span> : null}
       </div>
+      <button
+        type="button"
+        className="queue-row-action"
+        aria-label="Действия с треком"
+        onClick={(event) => {
+          event.stopPropagation();
+          onMenu(queueItemToCatalogTrack(item));
+        }}
+      >
+        <Dots />
+      </button>
     </li>
   );
 }
 
-function QueueBody({ queue, onPick }: { queue: QueuePayload | null; onPick: (item: QueueItem) => void }) {
+function QueueBody({
+  queue,
+  onPick,
+  onMenu,
+}: {
+  queue: QueuePayload | null;
+  onPick: (item: QueueItem) => void;
+  onMenu: (track: CatalogTrack) => void;
+}) {
   if (!queue) return null;
   const { before, current, after } = queue;
   if (!before.length && !current && !after.length) {
@@ -61,6 +103,7 @@ function QueueBody({ queue, onPick }: { queue: QueuePayload | null; onPick: (ite
               current={false}
               anchor={index === beforeAnchor}
               onPick={onPick}
+              onMenu={onMenu}
             />
           ))}
         </>
@@ -68,14 +111,21 @@ function QueueBody({ queue, onPick }: { queue: QueuePayload | null; onPick: (ite
       {current ? (
         <>
           <li className="queue-section-title">{nowTitle}</li>
-          <QueueTrack item={current} current anchor={currentAnchor} onPick={onPick} />
+          <QueueTrack item={current} current anchor={currentAnchor} onPick={onPick} onMenu={onMenu} />
         </>
       ) : null}
       {after.length > 0 ? (
         <>
           <li className="queue-section-title">{queue.after_title || 'Далее в очереди'}</li>
           {after.map((item, index) => (
-            <QueueTrack key={`a-${index}-${item.track_id ?? 'x'}`} item={item} current={false} anchor={false} onPick={onPick} />
+            <QueueTrack
+              key={`a-${index}-${item.track_id ?? 'x'}`}
+              item={item}
+              current={false}
+              anchor={false}
+              onPick={onPick}
+              onMenu={onMenu}
+            />
           ))}
         </>
       ) : null}
@@ -83,7 +133,15 @@ function QueueBody({ queue, onPick }: { queue: QueuePayload | null; onPick: (ite
   );
 }
 
-export function QueueSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function QueueSheet({
+  open,
+  onClose,
+  onMenu,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onMenu: (track: CatalogTrack) => void;
+}) {
   const queue = usePlaybackSelector((view) => view.queue);
   const epoch = usePlaybackSelector((view) => view.queueEpoch);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -148,7 +206,7 @@ export function QueueSheet({ open, onClose }: { open: boolean; onClose: () => vo
         }}
       >
         <ul id="queueList">
-          <QueueBody queue={queue} onPick={pick} />
+          <QueueBody queue={queue} onPick={pick} onMenu={onMenu} />
         </ul>
       </div>
     </div>

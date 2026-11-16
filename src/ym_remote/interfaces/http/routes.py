@@ -11,11 +11,17 @@ from ym_remote.interfaces.http.pages import MANIFEST, OPEN_HTML, SERVICE_WORKER
 from ym_remote.interfaces.ws.handler import parse_message
 from ym_remote.models.errors import RemoteError
 from ym_remote.schemas.catalog import (
+    AlbumDetailWire,
+    ArtistDetailWire,
+    ArtistFamiliarWire,
+    ArtistRefWire,
+    ArtistTracksPageWire,
     CatalogTrackWire,
     HomeWire,
     LikesWire,
     PlaylistCardWire,
     PlaylistDetailWire,
+    SearchResponseWire,
 )
 
 router = APIRouter()
@@ -103,6 +109,15 @@ async def search(request: Request, q: str = ""):
     return [CatalogTrackWire.from_track(track).model_dump() for track in tracks]
 
 
+@router.get("/api/search")
+async def api_search(request: Request, q: str = ""):
+    try:
+        view = await request.app.state.services.search.search_all(q)
+    except RemoteError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
+    return SearchResponseWire.from_view(view).model_dump()
+
+
 @router.get("/api/library/home")
 async def library_home(request: Request):
     try:
@@ -131,6 +146,94 @@ async def library_playlist(kind: int, request: Request):
     except RemoteError as exc:
         raise HTTPException(exc.status_code, exc.message) from exc
     return PlaylistDetailWire.from_playlist(playlist).model_dump()
+
+
+@router.get("/api/library/artist/{artist_id}")
+async def library_artist(artist_id: int, request: Request):
+    try:
+        detail = await request.app.state.services.library.artist(artist_id)
+    except RemoteError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
+    return ArtistDetailWire.from_detail(detail).model_dump()
+
+
+@router.get("/api/library/artist/{artist_id}/tracks")
+async def library_artist_tracks(
+    artist_id: int,
+    request: Request,
+    page: int = 0,
+    page_size: int = 50,
+):
+    try:
+        page_data = await request.app.state.services.library.artist_tracks(
+            artist_id, page=page, page_size=page_size
+        )
+    except RemoteError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
+    return ArtistTracksPageWire.from_page(page_data).model_dump()
+
+
+@router.get("/api/library/artist/{artist_id}/familiar")
+async def library_artist_familiar(artist_id: int, request: Request):
+    try:
+        familiar = await request.app.state.services.library.artist_familiar(artist_id)
+    except RemoteError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
+    if isinstance(familiar, tuple):
+        from ym_remote.models.music import FamiliarTracks
+
+        familiar = FamiliarTracks(collection=familiar, wave=())
+    return ArtistFamiliarWire.from_familiar(familiar).model_dump()
+
+
+@router.get("/api/library/album/{album_id}")
+async def library_album(album_id: int, request: Request):
+    try:
+        album = await request.app.state.services.library.album(album_id)
+    except RemoteError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
+    return AlbumDetailWire.from_album(album).model_dump()
+
+
+@router.get("/api/library/artists")
+async def library_artists(request: Request, ids: str = ""):
+    parsed_ids: list[int] = []
+    seen: set[int] = set()
+    for part in (ids or "").split(","):
+        token = part.strip()
+        if not token.isdigit():
+            continue
+        aid = int(token)
+        if aid > 0 and aid not in seen:
+            seen.add(aid)
+            parsed_ids.append(aid)
+    try:
+        artists = await request.app.state.services.library.artists_by_ids(parsed_ids)
+    except RemoteError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
+    return {"artists": [ArtistRefWire.from_artist(item).model_dump() for item in artists]}
+
+
+@router.get("/api/library/track/{track_id}/artists")
+async def library_track_artists(track_id: int, request: Request):
+    try:
+        artists = await request.app.state.services.library.track_artists(track_id)
+    except RemoteError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
+    return {"artists": [ArtistRefWire.from_artist(artist).model_dump() for artist in artists]}
+
+
+@router.get("/api/library/resolve-artist")
+async def library_resolve_artist(
+    request: Request,
+    title: str = "",
+    artist: str = "",
+):
+    try:
+        artists = await request.app.state.services.library.resolve_artists(title, artist)
+    except RemoteError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
+    return {"artists": [ArtistRefWire.from_artist(item).model_dump() for item in artists]}
 
 
 @router.websocket("/ws")

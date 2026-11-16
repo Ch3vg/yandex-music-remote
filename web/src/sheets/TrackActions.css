@@ -1,10 +1,10 @@
 .track-action-sheet {
   position: fixed;
   inset: 0;
-  z-index: 88;
+  z-index: 92;
   max-width: 480px;
   margin: 0 auto;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -14,56 +14,184 @@
   pointer-events: none;
   transition: opacity 0.25s ease;
 }
+
 .track-action-sheet.open {
   opacity: 1;
   pointer-events: auto;
 }
+
 .track-action-panel {
   width: 100%;
   background: var(--surface);
-  border-radius: 16px;
+  border-radius: 20px;
   padding: 8px 0 10px;
+  overflow: hidden;
   transform: translateY(16px);
   transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
 }
+
 .track-action-sheet.open .track-action-panel {
   transform: translateY(0);
 }
-.track-action-head {
-  padding: 12px 18px 8px;
+
+.track-action-grabber {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  margin: 2px auto 6px;
+}
+
+.track-action-top {
   border-bottom: 1px solid var(--divider);
 }
-.track-action-head .title {
-  font-size: 1rem;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+
+.track-action-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 18px 10px;
 }
-.track-action-head .artist {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  margin-top: 2px;
-  white-space: nowrap;
+
+.track-action-cover {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
   overflow: hidden;
-  text-overflow: ellipsis;
+  background: var(--surface-2);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.track-action-list { list-style: none; }
-.track-action-list button {
-  display: block;
+
+.track-action-cover img {
   width: 100%;
-  padding: 14px 18px;
-  font-size: 1rem;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.track-action-cover-ph {
+  font-size: 1.35rem;
+  color: rgba(255, 255, 255, 0.28);
+}
+
+.track-action-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.track-action-head .title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #ffffff;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.track-action-artists {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  padding: 4px 18px 14px;
+  scrollbar-width: none;
+}
+
+.track-action-artists::-webkit-scrollbar {
+  display: none;
+}
+
+.track-action-artist-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0;
   text-align: left;
 }
-.track-action-list button:active { background: rgba(255, 255, 255, 0.05); }
+
+.track-action-artist-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--surface-2);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.track-action-artist-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.track-action-artist-initial {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 1;
+}
+
+.track-action-artist-name {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.track-action-list {
+  list-style: none;
+  padding: 4px 0;
+}
+
+.track-action-list button {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 13px 18px;
+  font-size: 1rem;
+  font-weight: 400;
+  color: #ffffff;
+  text-align: left;
+}
+
+.track-action-list button:active {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.track-action-icon {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.88);
+  flex-shrink: 0;
+}
+
 .track-action-cancel {
   display: block;
   width: calc(100% - 24px);
-  margin: 6px auto 0;
+  margin: 4px auto 0;
   padding: 12px;
   text-align: center;
   font-size: 1rem;
   color: var(--text-muted);
   border-radius: 12px;
+  border-top: 1px solid var(--divider);
 }

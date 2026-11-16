@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ym_remote.models.playback import QueueItem, QueueView
+from ym_remote.schemas.catalog import ArtistRefWire
 
 
 def _item(item: QueueItem, *, current: bool = False) -> dict:
@@ -8,6 +9,7 @@ def _item(item: QueueItem, *, current: bool = False) -> dict:
     payload = {
         "title": item.track.title,
         "artist": item.track.artist_line(),
+        "artists": [ArtistRefWire.from_artist(a).model_dump() for a in item.track.artists],
         "cover": cover or None,
         "track_id": item.track.id,
         "album_id": item.track.album_id(),

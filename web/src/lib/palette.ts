@@ -164,6 +164,89 @@ function haloFromGlow(rgb: number[]): Pick<MiniLook, 'glow' | 'halo' | 'haloSoft
   };
 }
 
+export const DEFAULT_ARTIST_AMBIENT_RGB: [number, number, number] = [66, 68, 74];
+
+export function formatRgbTriplet(rgb: [number, number, number]): string {
+  return `${rgb[0]}, ${rgb[1]}, ${rgb[2]}`;
+}
+
+function toAtmosphericMistRgb(r: number, g: number, b: number): [number, number, number] {
+  const [h, s, l] = rgbToHsl(r, g, b);
+  if (s < 0.02) {
+    const neutralL = Math.min(0.51, Math.max(0.27, l * 0.84));
+    return hslToRgb(h, s, neutralL);
+  }
+  const nextS = s <= 0.12 ? s : Math.min(0.36, 0.12 + (s - 0.12) * 0.52);
+  const maxL = nextS > 0.18 ? 0.43 : 0.51;
+  const finalL = Math.min(maxL, Math.max(0.27, l * 0.84));
+  return hslToRgb(h, nextS, finalL);
+}
+
+export function normalizeArtistAmbientHex(
+  hex: string | null | undefined,
+): [number, number, number] | null {
+  if (!hex) return null;
+  const cleaned = hex.trim().replace(/^#/, '');
+  let full = cleaned;
+  if (/^[0-9a-fA-F]{3}$/.test(cleaned)) {
+    full = cleaned
+      .split('')
+      .map((ch) => ch + ch)
+      .join('');
+  }
+  if (!/^[0-9a-fA-F]{6}$/.test(full)) return null;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return toAtmosphericMistRgb(r, g, b);
+}
+
+export function sampleBottomEdgeColor(img: HTMLImageElement): [number, number, number] {
+  try {
+    const size = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return DEFAULT_ARTIST_AMBIENT_RGB;
+    ctx.drawImage(img, 0, 0, size, size);
+    const { data } = ctx.getImageData(0, 0, size, size);
+
+    const startY = Math.floor(size * 0.36);
+    const bandRows = Math.max(1, size - 1 - startY);
+    const leftEdge = Math.floor(size * 0.24);
+    const rightEdge = Math.ceil(size * 0.76);
+
+    let rSum = 0;
+    let gSum = 0;
+    let bSum = 0;
+    let wSum = 0;
+
+    for (let y = startY; y < size; y += 1) {
+      const rowWeight = 0.55 + 0.45 * ((y - startY) / bandRows);
+      for (let x = 0; x < size; x += 1) {
+        const idx = (y * size + x) * 4;
+        if (data[idx + 3] < 100) continue;
+        const pr = data[idx];
+        const pg = data[idx + 1];
+        const pb = data[idx + 2];
+        const colWeight = x < leftEdge || x >= rightEdge ? 1.5 : 0.85;
+        const w = rowWeight * colWeight;
+        rSum += pr * w;
+        gSum += pg * w;
+        bSum += pb * w;
+        wSum += w;
+      }
+    }
+
+    if (wSum <= 0) return DEFAULT_ARTIST_AMBIENT_RGB;
+
+    return toAtmosphericMistRgb(rSum / wSum, gSum / wSum, bSum / wSum);
+  } catch {
+    return DEFAULT_ARTIST_AMBIENT_RGB;
+  }
+}
+
 export function lookFromImage(url: string, img: HTMLImageElement): CoverLook {
   try {
     const palette = sampleCoverPalette(img);
