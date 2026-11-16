@@ -1,3 +1,35 @@
+@font-face {
+  font-family: "YS Text";
+  src: url("/fonts/YSText-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "YS Text";
+  src: url("/fonts/YSText-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "YS Text";
+  src: url("/fonts/YSText-Bold.woff2") format("woff2");
+  font-weight: 600 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "YSMusic Headline";
+  src: url("/fonts/YSMusic-HeadlineBold.woff2") format("woff2");
+  font-weight: 700 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --bg: #000000;
   --surface: #1c1c1e;
@@ -6,6 +38,9 @@
   --text-muted: rgba(255, 255, 255, 0.55);
   --text-dim: rgba(255, 255, 255, 0.35);
   --accent: #ffcc00;
+  --listen-yellow: #fed82b;
+  --font-text: "YS Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-heading: "YSMusic Headline", "YS Text", -apple-system, BlinkMacSystemFont, sans-serif;
   --player-c1: #5b8fd4;
   --player-c2: #2a4d7a;
   --divider: rgba(255, 255, 255, 0.08);
@@ -18,12 +53,13 @@
 [hidden] { display: none !important; }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-text);
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
   min-height: 100dvh;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
 button { font: inherit; color: inherit; border: none; background: none; cursor: pointer; }
@@ -85,14 +121,27 @@ body.chrome-hidden.mini-absent .home-scroll {
   max-height: calc(100dvh - var(--safe-b) - 56px);
 }
 
-body.chrome-hidden #screenPlaylist.active {
+body.chrome-hidden #screenPlaylist.active,
+body.chrome-hidden #screenArtistTracks.active,
+body.chrome-hidden #screenAlbum.active {
   max-height: calc(100dvh - var(--mini-h) - var(--safe-b) - 8px);
 }
-body.mini-absent #screenPlaylist {
+body.mini-absent #screenPlaylist,
+body.mini-absent #screenArtistTracks,
+body.mini-absent #screenAlbum {
   max-height: calc(100dvh - var(--safe-b) - 8px);
 }
-body.chrome-hidden.mini-absent #screenPlaylist.active {
+body.chrome-hidden.mini-absent #screenPlaylist.active,
+body.chrome-hidden.mini-absent #screenArtistTracks.active,
+body.chrome-hidden.mini-absent #screenAlbum.active {
   max-height: calc(100dvh - var(--safe-b) - 8px);
+}
+body.chrome-hidden .artist-scroll {
+  height: calc(100dvh - var(--mini-h) - var(--safe-b) - 8px);
+}
+body.mini-absent .artist-scroll,
+body.chrome-hidden.mini-absent .artist-scroll {
+  height: calc(100dvh - var(--safe-b) - 8px);
 }
 
 body.mini-absent .volume-screen {
@@ -114,9 +163,10 @@ body.chrome-hidden.mini-absent .volume-screen {
   min-height: 44px;
 }
 .screen-title {
-  font-size: 1.75rem;
+  font-family: var(--font-heading);
+  font-size: 1.7rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .status-dot {

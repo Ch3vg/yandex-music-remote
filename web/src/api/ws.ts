@@ -1,4 +1,4 @@
-import type { ClientCommand, QueueItem, QueuePayload, RepeatMode } from './types';
+import type { ArtistRef, ClientCommand, QueueItem, QueuePayload, RepeatMode } from './types';
 import { beginWork } from '../store/busy';
 import { applyPlayback, applyQueue, getSnapshot, markStopped, pushToast, setConnected, type PlaybackFields } from '../store/playback';
 
@@ -16,6 +16,7 @@ type Waiter = {
   kind: 'play' | 'menu' | 'queue';
   expectedKey: string;
   expectedTitle: string;
+  anyPlay: boolean;
   prevTrackId: string;
   end: () => void;
   timer: number;
@@ -48,6 +49,7 @@ function dropPlay(playback: PlaybackFields): void {
     if (item.expectedKey && incomingKey === item.expectedKey) return true;
     if (item.expectedTitle && incomingTitle === item.expectedTitle) return true;
     if (playback.track_id && playback.track_id !== item.prevTrackId) return true;
+    if (item.anyPlay && playback.track_id && playback.is_playing) return true;
     return false;
   });
   matched.forEach(dropWaiter);
@@ -58,17 +60,21 @@ function armWaiter(command: ClientCommand): void {
   let kind: Waiter['kind'] = 'queue';
   let expectedKey = '';
   let expectedTitle = '';
+  let anyPlay = false;
   const prevTrackId = getSnapshot().trackId;
   if (command.command === 'play_now') {
     kind = 'play';
     expectedTitle = command.title.trim().toLowerCase();
     expectedKey = `${command.artist.trim()}|${command.title.trim()}`.toLowerCase();
+  } else if (command.command === 'play_artist' || command.command === 'play_album') {
+    kind = 'play';
+    anyPlay = true;
   } else if (command.command === 'play_queue_track') {
     kind = 'queue';
   } else if (command.command === 'play_next' || command.command === 'add_to_queue') {
     kind = 'menu';
   }
-  const waiter: Waiter = { kind, expectedKey, expectedTitle, prevTrackId, end, timer: 0 };
+  const waiter: Waiter = { kind, expectedKey, expectedTitle, anyPlay, prevTrackId, end, timer: 0 };
   waiter.timer = window.setTimeout(() => dropWaiter(waiter), 90000);
   waiters.push(waiter);
 }
@@ -76,6 +82,8 @@ function armWaiter(command: ClientCommand): void {
 function shouldWait(command: ClientCommand, forced: boolean): boolean {
   if (forced) return true;
   return command.command === 'play_now'
+    || command.command === 'play_artist'
+    || command.command === 'play_album'
     || command.command === 'play_next'
     || command.command === 'add_to_queue'
     || command.command === 'play_queue_track';
@@ -126,12 +134,29 @@ function numOrNull(value: unknown): number | null {
   return null;
 }
 
+function parseArtists(raw: unknown): ArtistRef[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ArtistRef[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const obj = entry as Record<string, unknown>;
+    const name = text(obj.name).trim();
+    const id = numOrNull(obj.id);
+    const cover_url = textOrNull(obj.cover_url);
+    if (!name && id == null) continue;
+    out.push({ id, name, cover_url });
+  }
+  return out;
+}
+
 function parsePlayback(raw: Record<string, unknown>): PlaybackFields {
   const trackId = raw.track_id == null ? '' : String(raw.track_id);
   return {
     track_id: trackId,
     title: text(raw.title),
     artist: text(raw.artist),
+    artists: Array.isArray(raw.artists) ? parseArtists(raw.artists) : undefined,
+    artist_href: 'artist_href' in raw ? textOrNull(raw.artist_href) : undefined,
     is_playing: raw.is_playing !== false,
     cover_url: textOrNull(raw.cover_url),
     cover_url_hq: textOrNull(raw.cover_url_hq),
@@ -151,6 +176,7 @@ function parseItem(raw: unknown, current = false): QueueItem | null {
   return {
     title: text(item.title),
     artist: text(item.artist),
+    artists: Array.isArray(item.artists) ? parseArtists(item.artists) : undefined,
     cover: textOrNull(item.cover),
     track_id: numOrNull(item.track_id),
     album_id: numOrNull(item.album_id),

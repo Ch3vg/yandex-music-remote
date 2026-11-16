@@ -43,11 +43,43 @@ def queue_from_raw(raw) -> QueueView:
     )
 
 
-def _item(raw: dict, *, current: bool = False) -> QueueItem:
+def _int_id(value) -> int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return None
+
+
+def _parse_artists(raw: dict) -> tuple[Artist, ...]:
+    refs = raw.get("artist_refs")
+    if isinstance(refs, list):
+        parsed: list[Artist] = []
+        seen: set[tuple[int | None, str]] = set()
+        for ref in refs:
+            if not isinstance(ref, dict):
+                continue
+            name = str(ref.get("name") or "").strip()
+            if not name:
+                continue
+            aid = _int_id(ref.get("id"))
+            key = (aid, name)
+            if key in seen:
+                continue
+            seen.add(key)
+            parsed.append(Artist(name=name, id=aid))
+        if parsed:
+            return tuple(parsed)
     names = raw.get("artists") or []
     if isinstance(names, str):
         names = [part.strip() for part in names.split(",") if part.strip()]
-    artists = tuple(Artist(str(name).strip()) for name in names if str(name).strip())
+    return tuple(Artist(str(name).strip()) for name in names if str(name).strip())
+
+
+def _item(raw: dict, *, current: bool = False) -> QueueItem:
+    artists = _parse_artists(raw)
     album_id = raw.get("album_id") if isinstance(raw.get("album_id"), int) else None
     track_id = raw.get("track_id") if isinstance(raw.get("track_id"), int) else None
     cover = raw.get("cover") or None

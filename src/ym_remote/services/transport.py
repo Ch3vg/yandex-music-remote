@@ -11,6 +11,8 @@ from ym_remote.services.gate import HeavyGate
 from ym_remote.services.library import LibraryService
 from ym_remote.services.texts import (
     ADD_QUEUE_FAILED,
+    ALBUM_PLAY_FAILED,
+    ARTIST_PLAY_FAILED,
     LIKE_FAILED,
     MENU_UNAVAILABLE,
     NAVIGATE_FAILED,
@@ -32,7 +34,7 @@ _CDP_FAILURES = (CdpUnavailable, CdpError, OSError, ConnectionError)
 
 
 class TransportService:
-    """Политика пульта: плейлист, затем страница трека. Адаптер порядок не выбирает."""
+    """Политика пульта: контекст (плейлист / альбом / исполнитель), затем страница трека."""
 
     def __init__(
         self,
@@ -137,7 +139,72 @@ class TransportService:
             raise RemoteError(NAVIGATE_FAILED)
         return True
 
+    async def play_artist(self, artist_id: int) -> None:
+        async with self.gate.hold():
+            try:
+                code = await self.adapter.play_artist(artist_id)
+                if code in _PLAY_OK:
+                    return
+                if self.library is not None and hasattr(self.library, "artist"):
+                    detail = None
+                    try:
+                        detail = await self.library.artist(artist_id)
+                    except Exception:
+                        detail = None
+                    if detail is not None and detail.popular_tracks:
+                        first = detail.popular_tracks[0]
+                        if first.id is not None:
+                            album_id = first.album_id()
+                            if album_id is None and hasattr(self.library, "album_id_for"):
+                                album_id = await self.library.album_id_for(first.id)
+                            if album_id is not None:
+                                for attempt in range(2):
+                                    fallback = await self.adapter.play_track_page(first.id, album_id)
+                                    if fallback in _PLAY_OK:
+                                        return
+                                    if attempt == 0:
+                                        await asyncio.sleep(self.retry_pause)
+            except RemoteError:
+                raise
+            except (CdpUnavailable, OSError, ConnectionError) as exc:
+                raise RemoteError(PLAY_DESKTOP_FAILED) from exc
+            except CdpError as exc:
+                raise RemoteError(ARTIST_PLAY_FAILED) from exc
+        raise RemoteError(ARTIST_PLAY_FAILED)
+
+    async def play_album(self, album_id: int) -> None:
+        async with self.gate.hold():
+            try:
+                code = await self.adapter.play_album(album_id)
+                if code in _PLAY_OK:
+                    return
+                if self.library is not None and hasattr(self.library, "album"):
+                    album = None
+                    try:
+                        album = await self.library.album(album_id)
+                    except Exception:
+                        album = None
+                    if album is not None and album.tracks:
+                        first = album.tracks[0]
+                        if first.id is not None:
+                            aid = first.album_id() or album_id
+                            for attempt in range(2):
+                                fallback = await self.adapter.play_track_page(first.id, aid)
+                                if fallback in _PLAY_OK:
+                                    return
+                                if attempt == 0:
+                                    await asyncio.sleep(self.retry_pause)
+            except RemoteError:
+                raise
+            except (CdpUnavailable, OSError, ConnectionError) as exc:
+                raise RemoteError(PLAY_DESKTOP_FAILED) from exc
+            except CdpError as exc:
+                raise RemoteError(ALBUM_PLAY_FAILED) from exc
+        raise RemoteError(ALBUM_PLAY_FAILED)
+
     async def play_now(self, request: PlayRequest) -> None:
+        if request.album_id is None and request.context_album_id is not None:
+            request = replace(request, album_id=request.context_album_id)
         request = await self._with_album(request)
         async with self.gate.hold():
             try:
@@ -150,8 +217,30 @@ class TransportService:
                     )
                     if code in _PLAY_OK:
                         return
+                elif request.context_album_id is not None:
+                    code = await self.adapter.play_album_row(
+                        album_id=request.context_album_id,
+                        track_id=request.track_id,
+                        index=request.playlist_track_index,
+                    )
+                    if code in _PLAY_OK:
+                        return
+                elif request.artist_id is not None:
+                    code = await self.adapter.play_artist_row(
+                        artist_id=request.artist_id,
+                        mode=request.artist_mode,
+                        track_id=request.track_id,
+                        album_id=request.album_id,
+                        index=request.playlist_track_index,
+                    )
+                    if code in _PLAY_OK:
+                        return
                 if request.album_id is None:
-                    if request.playlist_uuid:
+                    if (
+                        request.playlist_uuid
+                        or request.artist_id is not None
+                        or request.context_album_id is not None
+                    ):
                         raise RemoteError(PLAY_FAILED)
                     raise RemoteError(NO_ALBUM.format(track_id=request.track_id))
                 for attempt in range(3):
@@ -175,6 +264,8 @@ class TransportService:
         return await self._menu(request, end=True)
 
     async def _menu(self, request: PlayRequest, *, end: bool) -> str:
+        if request.album_id is None and request.context_album_id is not None:
+            request = replace(request, album_id=request.context_album_id)
         request = await self._with_album(request)
         action = "end" if end else "next"
         code = "fail"
@@ -193,7 +284,33 @@ class TransportService:
                     if code == "no_menu":
                         raise RemoteError(MENU_UNAVAILABLE)
                     raise RemoteError(PLAYLIST_ACTION_FAILED)
+                if request.context_album_id is not None:
+                    code = await self.adapter.menu_album_row(
+                        album_id=request.context_album_id,
+                        track_id=request.track_id,
+                        index=request.playlist_track_index,
+                        action=action,
+                    )
+                    if code == "ok":
+                        return queue_notice(request.artist, request.title, end=end)
+                    if code == "no_menu":
+                        raise RemoteError(MENU_UNAVAILABLE)
+                elif request.artist_id is not None:
+                    code = await self.adapter.menu_artist_row(
+                        artist_id=request.artist_id,
+                        mode=request.artist_mode,
+                        track_id=request.track_id,
+                        album_id=request.album_id,
+                        index=request.playlist_track_index,
+                        action=action,
+                    )
+                    if code == "ok":
+                        return queue_notice(request.artist, request.title, end=end)
+                    if code == "no_menu":
+                        raise RemoteError(MENU_UNAVAILABLE)
                 if request.album_id is None:
+                    if request.artist_id is not None or request.context_album_id is not None:
+                        raise RemoteError(ADD_QUEUE_FAILED if end else TRACK_ACTION_FAILED)
                     raise RemoteError(NO_ALBUM.format(track_id=request.track_id))
                 for attempt in range(3):
                     code = await self.adapter.menu_track_page(request.track_id, request.album_id, action)

@@ -48,9 +48,10 @@ type Props = {
   phase: PlayerPhase;
   onClose: () => void;
   onQueue: () => void;
+  onArtist: () => void;
 };
 
-export function Player({ phase, onClose, onQueue }: Props) {
+export function Player({ phase, onClose, onQueue, onArtist }: Props) {
   const view = usePlaybackSelector((item) => item);
   const clock = useClock();
   const bgRef = useRef<HTMLDivElement>(null);
@@ -159,7 +160,7 @@ export function Player({ phase, onClose, onQueue }: Props) {
                 type="button"
                 className="player-track-row"
                 id="playerTrackRow"
-                onClick={() => send({ command: 'navigate', target: 'artist' })}
+                onClick={onArtist}
               >
                 <img className="track-thumb" id="npThumb" alt="" hidden={!view.coverUrl} src={view.coverUrl || undefined} width={44} height={44} />
                 <div className="track-thumb ph" id="npThumbPh" hidden={!!view.coverUrl}>♪</div>

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ym_remote.models.music import Track
+from ym_remote.models.music import Artist, Track
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,7 @@ class Playback:
     shuffle: bool
     liked: bool
     queue_name: str
+    artists: tuple[Artist, ...] = ()
 
     def track_key(self) -> str:
         return f"{self.artist}|{self.title}"
