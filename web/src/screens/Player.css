@@ -57,6 +57,9 @@ body.player-open .player-bg {
   font-weight: 500;
   color: rgba(255, 255, 255, 0.55);
   letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .player-nav-title {
   font-size: 0.82rem;

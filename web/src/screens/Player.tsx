@@ -48,10 +48,10 @@ type Props = {
   phase: PlayerPhase;
   onClose: () => void;
   onQueue: () => void;
-  onArtist: () => void;
+  onTrackMenu: () => void;
 };
 
-export function Player({ phase, onClose, onQueue, onArtist }: Props) {
+export function Player({ phase, onClose, onQueue, onTrackMenu }: Props) {
   const view = usePlaybackSelector((item) => item);
   const clock = useClock();
   const bgRef = useRef<HTMLDivElement>(null);
@@ -139,7 +139,7 @@ export function Player({ phase, onClose, onQueue, onArtist }: Props) {
             </svg>
           </button>
           <div className="player-nav-center">
-            <div className="player-nav-kicker">Сейчас играет</div>
+            <div className="player-nav-kicker">{view.contextLabel || 'Сейчас играет'}</div>
             <div className="player-nav-title" id="playerQueueName">{view.queueName || '—'}</div>
           </div>
           <button type="button" className="nav-btn" id="btnPlayerQueue" aria-label="Очередь" onClick={onQueue}>
@@ -160,7 +160,8 @@ export function Player({ phase, onClose, onQueue, onArtist }: Props) {
                 type="button"
                 className="player-track-row"
                 id="playerTrackRow"
-                onClick={onArtist}
+                aria-label="Меню трека"
+                onClick={onTrackMenu}
               >
                 <img className="track-thumb" id="npThumb" alt="" hidden={!view.coverUrl} src={view.coverUrl || undefined} width={44} height={44} />
                 <div className="track-thumb ph" id="npThumbPh" hidden={!!view.coverUrl}>♪</div>

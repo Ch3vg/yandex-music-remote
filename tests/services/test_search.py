@@ -1,4 +1,4 @@
-from ym_remote.cdp.search import SearchHit, tracks_from_search
+from ym_remote.cdp.search import SearchHit, promos_from_markup, tracks_from_search
 from ym_remote.models.music import Artist, Cover, Track
 from ym_remote.services.gate import HeavyGate
 from ym_remote.services.search import SearchService
@@ -82,6 +82,82 @@ def test_tracks_from_search_parses_artist_refs_and_artist_cards():
         (102, "Драгни"),
     ]
     assert [(a.id, a.name) for a in hit.artists] == [(101, "Soltwine")]
+    assert hit.waves == () and hit.lumen is None
+
+
+def test_promos_from_markup_keeps_lumen_and_separate_wave_cards():
+    markup = """
+    <div class="results">
+      <div data-test-id="TAB">Моя волна</div>
+      <div>
+        <div data-test-id="QUERY_TO_VIBE_BLOCK">
+          <img src="lumen.png"/>
+          <div data-test-id="ENTITY_CARD_ENTITY_META">
+            <span data-test-id="ENTITY_CARD_ENTITY_META_TITLE">Jdm phonk wav</span>
+            <span data-test-id="ENTITY_CARD_ENTITY_META_DESCRIPTION">Я так чувствую — Моя волна от люмена</span>
+          </div>
+        </div>
+        <div data-test-id="SEARCH_VIBE_CARD">
+          <img src="a.png"/>
+          <span data-test-id="ENTITY_CARD_ENTITY_META_TITLE">Этника сальвадорских улиц</span>
+          <span data-test-id="ENTITY_CARD_ENTITY_META_DESCRIPTION">Моя волна</span>
+        </div>
+        <div data-test-id="SEARCH_VIBE_CARD">
+          <span data-test-id="ENTITY_CARD_ENTITY_META_TITLE">Мистический йойк и дыхание севера</span>
+          <span data-test-id="ENTITY_CARD_ENTITY_META_DESCRIPTION">Моя волна</span>
+        </div>
+        <div data-test-id="SEARCH_VIBE_CARD">
+          <span data-test-id="ENTITY_CARD_ENTITY_META_TITLE">Читать Лавкрафта под жуткий данжен-синт</span>
+          <span data-test-id="ENTITY_CARD_ENTITY_META_DESCRIPTION">Моя волна</span>
+        </div>
+      </div>
+    </div>
+    """
+    waves, lumen = promos_from_markup(markup)
+    assert lumen is not None
+    assert lumen.title == "Jdm phonk wav"
+    assert lumen.subtitle == "Я так чувствую — Моя волна от люмена"
+    assert lumen.cover_url == "lumen.png"
+    assert [item.title for item in waves] == [
+        "Этника сальвадорских улиц",
+        "Мистический йойк и дыхание севера",
+        "Читать Лавкрафта под жуткий данжен-синт",
+    ]
+    assert [item.subtitle for item in waves] == ["Моя волна", "Моя волна", "Моя волна"]
+
+
+def test_tracks_from_search_drops_generic_wave_title():
+    hit = tracks_from_search(
+        {
+            "ok": True,
+            "tracks": [],
+            "waves": [
+                {"title": "Моя волна", "subtitle": "Моя волна"},
+                {"title": "Этника сальвадорских улиц", "subtitle": "Моя волнаМистический йойк Моя волна"},
+                {"title": "Этника сальвадорских улиц", "subtitle": "Моя волна"},
+            ],
+        }
+    )
+    assert [item.title for item in hit.waves] == ["Этника сальвадорских улиц"]
+    assert hit.waves[0].subtitle == "Моя волна"
+
+
+def test_tracks_from_search_keeps_waves_and_lumen():
+    hit = tracks_from_search(
+        {
+            "ok": True,
+            "tracks": [],
+            "waves": [
+                {"title": "Энергичное", "subtitle": "Моя волна по настроению", "cover": "cdn/w"},
+                {"title": "Бодрое утро", "subtitle": "Моя волна", "cover": ""},
+            ],
+            "lumen": {"title": "JDM phonk", "subtitle": "Моя волна от люмена", "cover": "cdn/l"},
+        }
+    )
+    assert [item.title for item in hit.waves] == ["Энергичное", "Бодрое утро"]
+    assert hit.waves[0].cover_url == "cdn/w"
+    assert hit.lumen is not None and hit.lumen.title == "JDM phonk"
+    assert hit.lumen.cover_url == "cdn/l"
 
 
 async def test_search_all_uses_api_artists_and_falls_back_to_cdp_artists():

@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CatalogTrack, PlayMode } from '../api/types';
+import { send } from '../api/ws';
+import { WaveBanner } from '../components/WaveBanner';
+import { useWorkPending } from '../store/busy';
 import {
   type ArtistChipItem,
   buildInitialArtistChips,
@@ -16,6 +19,7 @@ const ACTIONS: { id: PlayMode; label: string }[] = [
 
 type Props = {
   track: CatalogTrack | null;
+  playback?: boolean;
   onClose: () => void;
   onAction: (track: CatalogTrack, mode: PlayMode) => void;
   onSelectArtist: (chip: ArtistChipItem, track: CatalogTrack) => void;
@@ -87,7 +91,8 @@ function ArtistChipAvatar({ url, name }: { url: string | null | undefined; name:
   );
 }
 
-export function TrackActions({ track, onClose, onAction, onSelectArtist }: Props) {
+export function TrackActions({ track, playback = false, onClose, onAction, onSelectArtist }: Props) {
+  const waveBusy = useWorkPending();
   const lastTrackRef = useRef<CatalogTrack | null>(null);
   if (track) {
     lastTrackRef.current = track;
@@ -121,6 +126,9 @@ export function TrackActions({ track, onClose, onAction, onSelectArtist }: Props
   }, [track]);
 
   const chips = hydrated && hydrated.key === trackKey ? hydrated.chips : baseChips;
+  const albumId = Number(displayTrack?.album_id);
+  const trackId = Number(displayTrack?.id);
+  const canWave = Number.isFinite(albumId) && albumId > 0 && Number.isFinite(trackId) && trackId > 0;
   const canPlayTrack =
     displayTrack == null
     || (Number.isFinite(Number(displayTrack.id)) && Number(displayTrack.id) > 0);
@@ -163,7 +171,28 @@ export function TrackActions({ track, onClose, onAction, onSelectArtist }: Props
           ) : null}
         </div>
 
-        {canPlayTrack ? (
+        {(playback || canWave) ? (
+          <WaveBanner
+            id="btnTrackWave"
+            kicker="Моя волна по треку"
+            title={displayTrack?.title || 'Трек'}
+            tone="track"
+            disabled={waveBusy}
+            onClick={() => {
+              if (!track) return;
+              const id = Number(track.id);
+              const album = Number(track.album_id);
+              if (Number.isFinite(id) && id > 0 && Number.isFinite(album) && album > 0) {
+                send({ command: 'start_wave', source: 'track', track_id: id, album_id: album });
+              } else {
+                send({ command: 'start_wave', source: 'current' });
+              }
+              onClose();
+            }}
+          />
+        ) : null}
+
+        {canPlayTrack && !playback ? (
           <ul className="track-action-list" id="trackActionList">
             {ACTIONS.map((action) => (
               <li key={action.id}>

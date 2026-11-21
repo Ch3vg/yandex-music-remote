@@ -15,6 +15,7 @@ from ym_remote.services.monitor import MonitorService
 from ym_remote.services.queue import QueueService
 from ym_remote.services.search import SearchService
 from ym_remote.services.transport import TransportService
+from ym_remote.cdp.wave_art import WaveArtService
 from ym_remote.yandex.client import YandexLibrary
 
 
@@ -25,6 +26,7 @@ class Services:
     transport: TransportService
     queue: QueueService
     monitor: MonitorService
+    wave_art: WaveArtService
     session: CdpSession
     catalog: YandexLibrary
     gate: HeavyGate
@@ -39,6 +41,7 @@ def build_services(cdp_port: int, gate: HeavyGate, catalog: YandexLibrary, hub) 
         transport=TransportService(TransportCdpAdapter(session), library, gate),
         queue=QueueService(QueueCdpAdapter(session), gate),
         monitor=MonitorService(MonitorCdpAdapter(session), gate, hub),
+        wave_art=WaveArtService(session),
         session=session,
         catalog=catalog,
         gate=gate,

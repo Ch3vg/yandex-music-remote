@@ -189,6 +189,7 @@
 .artist-actions {
   display: flex;
   justify-content: center;
+  gap: 28px;
   padding: 10px 0 22px;
 }
 

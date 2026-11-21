@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { CatalogTrack, PlayContext, PlaylistResponse } from '../api/types';
 import { fetchJson } from '../api/http';
+import { send } from '../api/ws';
 import { TrackRow } from '../components/TrackRow';
+import { WaveBanner } from '../components/WaveBanner';
+import { useWorkPending } from '../store/busy';
 import './Playlist.css';
 
 export type PlaylistRequest = {
@@ -26,11 +29,15 @@ function indexed(tracks: CatalogTrack[], track: CatalogTrack): CatalogTrack {
 }
 
 export function Playlist({ active, request, onBack, onPlay, onMenu, onContext }: Props) {
+  const waveBusy = useWorkPending();
   const [title, setTitle] = useState(request?.title || 'Плейлист');
   const [filter, setFilter] = useState('');
   const [tracks, setTracks] = useState<CatalogTrack[]>([]);
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [error, setError] = useState('');
+  const [playlistUuid, setPlaylistUuid] = useState<string | null>(null);
+  const [playlistUid, setPlaylistUid] = useState<number | null>(null);
+  const [playlistKind, setPlaylistKind] = useState<number | null>(null);
 
   useEffect(() => {
     setFilter('');
@@ -45,6 +52,9 @@ export function Playlist({ active, request, onBack, onPlay, onMenu, onContext }:
         const list = body.tracks || [];
         setTracks(list);
         setTitle(body.title || request.title || 'Плейлист');
+        setPlaylistUuid(body.playlist_uuid || null);
+        setPlaylistUid(body.uid ?? null);
+        setPlaylistKind(body.kind ?? request.kind);
         onContext(
           body.playlist_uuid
             ? {
@@ -81,6 +91,7 @@ export function Playlist({ active, request, onBack, onPlay, onMenu, onContext }:
           </svg>
         </button>
         <h1 id="playlistScreenTitle">{title}</h1>
+        <span className="header-balance" />
       </div>
       <div className="playlist-search">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.45">
@@ -96,6 +107,33 @@ export function Playlist({ active, request, onBack, onPlay, onMenu, onContext }:
           onChange={(event) => setFilter(event.target.value)}
         />
       </div>
+      {playlistUuid ? (
+        <div className="playlist-wave">
+          <WaveBanner
+            id="btnPlaylistWave"
+            kicker="Моя волна по плейлисту"
+            title={title}
+            tone="playlist"
+            disabled={waveBusy}
+            onClick={() => {
+              const command: {
+                command: 'start_wave';
+                source: 'playlist';
+                playlist_uuid: string;
+                playlist_kind?: number;
+                playlist_uid?: number;
+              } = {
+                command: 'start_wave',
+                source: 'playlist',
+                playlist_uuid: playlistUuid,
+              };
+              if (playlistKind && playlistKind > 0) command.playlist_kind = playlistKind;
+              if (playlistUid && playlistUid > 0) command.playlist_uid = playlistUid;
+              send(command);
+            }}
+          />
+        </div>
+      ) : null}
       <ul className="track-list" id="playlistTracks">
         {status === 'loading' ? <li className="list-meta">Загрузка…</li> : null}
         {status === 'error' ? <li className="list-meta">{error}</li> : null}

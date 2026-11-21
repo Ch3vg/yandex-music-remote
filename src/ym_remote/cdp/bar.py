@@ -107,4 +107,5 @@ def playback_from_raw(raw: dict | None) -> Playback | None:
         liked=bool(raw.get("liked")),
         queue_name=str(raw.get("queue_name") or ""),
         artists=artist_objs,
+        context_label=str(raw.get("context_label") or ""),
     )

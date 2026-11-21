@@ -186,6 +186,18 @@ export function Album({ active, request, onBack, onOpenArtist, onPlay, onMenu }:
               {metaParts.length > 0 ? (
                 <div className="album-meta">{metaParts.join(' · ')}</div>
               ) : null}
+              <div className="album-actions">
+              <button
+                type="button"
+                className="album-play-btn"
+                id="btnAlbumWave"
+                onClick={() => {
+                  if (album.id > 0) send({ command: 'start_wave', source: 'album', album_id: album.id });
+                }}
+              >
+                <span className="album-play-circle album-wave-circle" aria-hidden="true">〜</span>
+                <span className="album-play-caption">Волна</span>
+              </button>
               <button
                 type="button"
                 className="album-play-btn"
@@ -209,6 +221,7 @@ export function Album({ active, request, onBack, onOpenArtist, onPlay, onMenu }:
                 </span>
                 <span className="album-play-caption">Слушать</span>
               </button>
+              </div>
             </div>
 
             <ul className="track-list" id="albumTracks">

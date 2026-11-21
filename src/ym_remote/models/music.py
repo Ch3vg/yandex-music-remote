@@ -148,7 +148,17 @@ class TrackPage:
 
 
 @dataclass(frozen=True)
+class PromoCard:
+    title: str
+    subtitle: str = ""
+    cover_url: str | None = None
+    background: str | None = None
+
+
+@dataclass(frozen=True)
 class SearchView:
     artists: tuple[Artist, ...] = ()
     tracks: tuple[Track, ...] = ()
+    waves: tuple[PromoCard, ...] = ()
+    lumen: PromoCard | None = None
 

@@ -7,10 +7,11 @@ from pydantic import ValidationError
 
 from ym_remote.models.errors import RemoteError
 from ym_remote.schemas.play import PlayCommand
+from ym_remote.schemas.wave import EmptyLumenPrompt, parse_start_wave
 from ym_remote.schemas.queue import queue_message
 from ym_remote.services.monitor import MonitorService
 from ym_remote.services.queue import QueueService
-from ym_remote.services.texts import ALBUM_PLAY_FAILED, ARTIST_PLAY_FAILED, PLAY_FAILED
+from ym_remote.services.texts import ALBUM_PLAY_FAILED, ARTIST_PLAY_FAILED, LUMEN_PROMPT_EMPTY, PLAY_FAILED
 from ym_remote.services.transport import TransportService
 
 
@@ -157,6 +158,21 @@ class CommandHandler:
             return
         try:
             await self.transport.play_album(album_id)
+        except RemoteError as exc:
+            await self._error(websocket, exc.message)
+            return
+        await self.monitor.command_tick(websocket, 0.2)
+
+    async def _cmd_start_wave(self, websocket, message: dict) -> None:
+        try:
+            request = parse_start_wave(message)
+        except EmptyLumenPrompt:
+            await self._error(websocket, LUMEN_PROMPT_EMPTY)
+            return
+        if request is None:
+            return
+        try:
+            await self.transport.start_wave(request)
         except RemoteError as exc:
             await self._error(websocket, exc.message)
             return

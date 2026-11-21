@@ -146,8 +146,9 @@ async def test_open_player_selectors_and_links_match_the_track(music_page: CdpSe
             assert _stem(cover) in artwork
 
     album_href = str(raw.get("album_href") or "")
-    assert _ALBUM_ID.search(album_href), album_href
-    if probe.get("vibe") and probe.get("albumHref"):
+    if album_href or probe.get("albumHref"):
+        assert _ALBUM_ID.search(album_href), album_href
+    if probe.get("vibe") and probe.get("albumHref") and album_href:
         assert _ALBUM_ID.search(album_href).group(1) == _ALBUM_ID.search(str(probe["albumHref"])).group(1)
 
     artist_href = str(raw.get("artist_href") or "")

@@ -4,6 +4,8 @@ import type { AlbumCard, ArtistDetail, CatalogTrack, PlayContext } from '../api/
 import { send } from '../api/ws';
 import type { ArtistTracksMode } from '../app/screen';
 import { TrackRow } from '../components/TrackRow';
+import { WaveBanner } from '../components/WaveBanner';
+import { useWorkPending } from '../store/busy';
 import { normalizeCoverUrl } from '../lib/coverUrl';
 import {
   DEFAULT_ARTIST_AMBIENT_RGB,
@@ -192,6 +194,7 @@ export function Artist({
   onPlay,
   onMenu,
 }: Props) {
+  const waveBusy = useWorkPending();
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [detail, setDetail] = useState<ArtistDetail | null>(null);
   const [error, setError] = useState('');
@@ -429,6 +432,17 @@ export function Artist({
                   </div>
                 </button>
               ) : null}
+
+              <WaveBanner
+                id="btnArtistWave"
+                kicker="Моя волна по исполнителю"
+                title={detail.name}
+                tone="collection"
+                disabled={waveBusy || !(artistId > 0)}
+                onClick={() => {
+                  if (artistId > 0) send({ command: 'start_wave', source: 'artist', artist_id: artistId });
+                }}
+              />
 
               <AlbumCarouselSection
                 heading="Альбомы"

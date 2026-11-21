@@ -18,3 +18,19 @@ class PlayRequest:
     artist_id: int | None = None
     artist_mode: str | None = None
     context_album_id: int | None = None
+
+
+@dataclass(frozen=True)
+class WaveRequest:
+    """Запуск уже существующего контекста волны в десктопном приложении."""
+
+    source: str
+    track_id: int | None = None
+    album_id: int | None = None
+    artist_id: int | None = None
+    playlist_uuid: str | None = None
+    playlist_kind: int | None = None
+    playlist_uid: int | None = None
+    prompt: str = ""
+    card_title: str | None = None
+    card_index: int | None = None

@@ -26,6 +26,24 @@ TRACK_ACTION_FAILED = "Не удалось выполнить действие �
 PLAYLIST_ACTION_FAILED = "Не удалось выполнить действие в плейлисте (трек не найден в списке или меню недоступно)"
 NO_ALBUM = "У трека {track_id} нет альбома — откройте плейлист в приложении и включите трек оттуда"
 PLAY_DESKTOP_FAILED = "Не удалось включить трек в приложении на ПК"
+WAVE_PERSONAL_FAILED = "Не удалось включить Мою волну"
+WAVE_NEED_TRACK = "Сначала включите трек"
+WAVE_TRACK_FAILED = "Не удалось включить волну по треку"
+WAVE_ARTIST_FAILED = "Не удалось включить волну по исполнителю"
+WAVE_ALBUM_FAILED = "Не удалось включить волну по альбому"
+WAVE_PLAYLIST_FAILED = "Не удалось включить волну по плейлисту"
+LUMEN_FAILED = "Не удалось запустить Люмен"
+LUMEN_PROMPT_EMPTY = "Опишите, какую музыку включить"
+
+WAVE_FAILURES = {
+    "personal": WAVE_PERSONAL_FAILED,
+    "current": WAVE_TRACK_FAILED,
+    "track": WAVE_TRACK_FAILED,
+    "artist": WAVE_ARTIST_FAILED,
+    "album": WAVE_ALBUM_FAILED,
+    "playlist": WAVE_PLAYLIST_FAILED,
+    "lumen": LUMEN_FAILED,
+}
 
 SEARCH_CODES = {
     "no_button": SEARCH_BUTTON,

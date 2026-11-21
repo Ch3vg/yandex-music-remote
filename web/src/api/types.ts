@@ -69,9 +69,18 @@ export type ArtistFamiliarResponse = {
   tracks?: CatalogTrack[];
 };
 
+export type PromoCard = {
+  title: string;
+  subtitle?: string;
+  cover_url?: string | null;
+  background?: string | null;
+};
+
 export type SearchResponse = {
   artists: ArtistCard[];
   tracks: CatalogTrack[];
+  waves?: PromoCard[];
+  lumen?: PromoCard | null;
 };
 
 export type PlaylistCard = {
@@ -173,6 +182,19 @@ export type ClientCommand =
   | { command: 'navigate'; target: 'artist' | 'album' }
   | { command: 'play_artist'; artist_id: number }
   | { command: 'play_album'; album_id: number }
+  | { command: 'start_wave'; source: 'personal'; card_title?: string; card_index?: number }
+  | { command: 'start_wave'; source: 'current' }
+  | { command: 'start_wave'; source: 'track'; track_id: number; album_id: number }
+  | { command: 'start_wave'; source: 'artist'; artist_id: number }
+  | { command: 'start_wave'; source: 'album'; album_id: number }
+  | {
+      command: 'start_wave';
+      source: 'playlist';
+      playlist_uuid: string;
+      playlist_kind?: number;
+      playlist_uid?: number;
+    }
+  | { command: 'start_wave'; source: 'lumen'; prompt: string }
   | {
       command: 'play_now' | 'play_next' | 'add_to_queue';
       track_id: number;
