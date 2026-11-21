@@ -283,3 +283,45 @@ async def test_play_now_and_play_next_with_artist_and_album_contexts_and_fallbac
             PlayRequest(track_id=12, album_id=101, artist_id=36800, artist_mode="tracks")
         )
     assert err.value.message == MENU_UNAVAILABLE
+
+
+class _WaveAdapter:
+    def __init__(self, gate: HeavyGate, code: str = "started"):
+        self.gate = gate
+        self.code = code
+        self.heavy: list[bool] = []
+        self.sources: list[str] = []
+
+    async def start_wave(self, request):
+        self.heavy.append(self.gate.active)
+        self.sources.append(request.source)
+        if self.code == "down":
+            raise CdpUnavailable("down")
+        return self.code
+
+
+async def test_start_wave_uses_the_heavy_gate_and_source_errors():
+    from ym_remote.models.requests import WaveRequest
+    from ym_remote.services.texts import LUMEN_FAILED, WAVE_NEED_TRACK, WAVE_PERSONAL_FAILED
+
+    gate = HeavyGate()
+    adapter = _WaveAdapter(gate)
+    service = TransportService(adapter, None, gate, retry_pause=0)
+    await service.start_wave(WaveRequest(source="personal"))
+    assert adapter.heavy == [True]
+    assert adapter.sources == ["personal"]
+
+    missing = _WaveAdapter(gate, "no_track")
+    with pytest.raises(RemoteError) as err:
+        await TransportService(missing, None, gate, retry_pause=0).start_wave(WaveRequest(source="current"))
+    assert err.value.message == WAVE_NEED_TRACK
+
+    down = _WaveAdapter(gate, "down")
+    with pytest.raises(RemoteError) as err:
+        await TransportService(down, None, gate, retry_pause=0).start_wave(WaveRequest(source="lumen", prompt="джаз"))
+    assert err.value.message == LUMEN_FAILED
+
+    failed = _WaveAdapter(gate, "fail")
+    with pytest.raises(RemoteError) as err:
+        await TransportService(failed, None, gate, retry_pause=0).start_wave(WaveRequest(source="personal"))
+    assert err.value.message == WAVE_PERSONAL_FAILED

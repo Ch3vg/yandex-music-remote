@@ -25,6 +25,7 @@ type State = {
   repeatMode: RepeatMode;
   liked: boolean;
   queueName: string;
+  contextLabel: string;
   pos: number;
   dur: number;
   at: number;
@@ -57,6 +58,7 @@ export type PlaybackView = {
   repeatMode: RepeatMode;
   liked: boolean;
   queueName: string;
+  contextLabel: string;
   duration: number;
   dragging: boolean;
   swipeGen: number;
@@ -85,6 +87,7 @@ export type PlaybackFields = {
   shuffle: boolean;
   liked: boolean | null;
   queue_name: string;
+  context_label: string;
 };
 
 const listeners = new Set<() => void>();
@@ -115,6 +118,7 @@ const state: State = {
   repeatMode: 'off',
   liked: false,
   queueName: '',
+  contextLabel: '',
   pos: 0,
   dur: 0,
   at: 0,
@@ -156,6 +160,7 @@ function toView(): PlaybackView {
     repeatMode: state.repeatMode,
     liked: state.liked,
     queueName: state.queueName,
+    contextLabel: state.contextLabel,
     duration: state.dur,
     dragging: state.dragging,
     swipeGen: state.swipeGen,
@@ -345,6 +350,7 @@ export function applyPlayback(msg: PlaybackFields, full: boolean): boolean {
     }
   }
   if (msg.queue_name) rememberQueueName(msg.queue_name);
+  state.contextLabel = (msg.context_label || '').trim();
 
   let echoedVolume = false;
   if (msg.volume != null) {

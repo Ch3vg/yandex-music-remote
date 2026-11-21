@@ -23,7 +23,6 @@
   font-size: 1.25rem;
   font-weight: 700;
   text-align: center;
-  margin-right: 44px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -37,6 +36,8 @@
   padding: 10px 14px;
   margin-bottom: 12px;
 }
+.playlist-wave { padding: 0 0 4px; }
+.playlist-wave .wave-banner { margin-bottom: 8px; }
 .playlist-search input {
   flex: 1;
   border: none;

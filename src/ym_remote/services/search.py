@@ -6,7 +6,7 @@ from dataclasses import replace
 from ym_remote.cdp.search import SearchCdpAdapter, SearchHit
 from ym_remote.cdp.session import CdpError, CdpUnavailable
 from ym_remote.models.errors import RemoteError
-from ym_remote.models.music import Album, Artist, SearchView, Track
+from ym_remote.models.music import Album, Artist, PromoCard, SearchView, Track
 from ym_remote.services.gate import HeavyGate
 from ym_remote.services.library import LibraryService
 from ym_remote.services.texts import SEARCH_CODES, SEARCH_PARSE, SEARCH_UNAVAILABLE
@@ -49,7 +49,12 @@ class SearchService:
             artists = api_artists
         else:
             artists = hit.artists
-        return SearchView(artists=artists, tracks=tracks)
+        return SearchView(
+            artists=artists,
+            tracks=tracks,
+            waves=tuple(card for card in (_promo(item) for item in hit.waves) if card is not None),
+            lumen=_promo(hit.lumen),
+        )
 
     async def _cdp_search(self, query: str) -> SearchHit:
         async with self.gate.hold():
@@ -77,3 +82,19 @@ class SearchService:
                 continue
             filled.append(replace(track, albums=(Album(album_id, ""),) + track.albums))
         return tuple(filled)
+
+
+def _promo(card) -> PromoCard | None:
+    if card is None:
+        return None
+    title = str(getattr(card, "title", "") or "").strip()
+    if not title:
+        return None
+    cover = getattr(card, "cover_url", None)
+    background = getattr(card, "background", None)
+    return PromoCard(
+        title=title,
+        subtitle=str(getattr(card, "subtitle", "") or ""),
+        cover_url=str(cover).strip() if cover else None,
+        background=str(background).strip() if background else None,
+    )

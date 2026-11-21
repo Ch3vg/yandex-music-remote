@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ym_remote.cdp.adapter import CdpAdapter
+from ym_remote.models.requests import WaveRequest
 from ym_remote.cdp.scripts import (
     album_play_script,
     album_row_script,
@@ -17,7 +18,14 @@ from ym_remote.cdp.scripts import (
     set_repeat_script,
     shuffle_script,
     track_page_script,
+    track_wave_script,
     volume_script,
+    album_wave_script,
+    artist_wave_script,
+    current_wave_script,
+    lumen_script,
+    personal_wave_script,
+    playlist_wave_script,
 )
 
 
@@ -133,6 +141,29 @@ class TransportCdpAdapter(CdpAdapter):
         action: str,
     ) -> str:
         expression = album_row_script(album_id, track_id, index, action)
+        return await self._code(expression, timeout=35)
+
+    async def start_wave(self, request: WaveRequest) -> str:
+        if request.source == "personal":
+            expression = personal_wave_script(request.card_title, request.card_index)
+        elif request.source == "current":
+            expression = current_wave_script()
+        elif request.source == "track":
+            expression = track_wave_script(int(request.track_id or 0), int(request.album_id or 0))
+        elif request.source == "artist":
+            expression = artist_wave_script(int(request.artist_id or 0))
+        elif request.source == "album":
+            expression = album_wave_script(int(request.album_id or 0))
+        elif request.source == "playlist":
+            expression = playlist_wave_script(
+                request.playlist_uuid or "",
+                request.playlist_kind,
+                request.playlist_uid,
+            )
+        elif request.source == "lumen":
+            expression = lumen_script(request.prompt)
+        else:
+            return "fail"
         return await self._code(expression, timeout=35)
 
     async def menu_track_page(self, track_id: int, album_id: int | None, action: str) -> str:

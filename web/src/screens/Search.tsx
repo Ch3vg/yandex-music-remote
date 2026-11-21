@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchJson } from '../api/http';
-import type { ArtistCard, CatalogTrack, SearchResponse } from '../api/types';
+import type { ArtistCard, CatalogTrack, PromoCard, SearchResponse } from '../api/types';
+import { send } from '../api/ws';
 import { TrackRow } from '../components/TrackRow';
 import { normalizeCoverUrl } from '../lib/coverUrl';
 import './Search.css';
@@ -13,6 +14,31 @@ type Props = {
   onPlay: (track: CatalogTrack) => void;
   onMenu: (track: CatalogTrack) => void;
 };
+
+function waveImageSrc(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const raw = url.trim();
+  if (!raw || /^blob:/i.test(raw)) return null;
+  if (/^data:image\//i.test(raw)) return raw.length <= 24000 ? raw : null;
+  return normalizeCoverUrl(raw, '200x200');
+}
+
+function WaveCover({ url }: { url: string | null | undefined }) {
+  const src = waveImageSrc(url);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+  if (!src || failed) return <span className="search-wave-cover ph" aria-hidden="true" />;
+  return <img className="search-wave-cover" src={src} alt="" onError={() => setFailed(true)} />;
+}
+
+function waveRowProps(card: PromoCard): { className: string; style?: { background: string } } {
+  if (!card.cover_url && card.background) {
+    return { className: 'search-wave-row has-fill', style: { background: card.background } };
+  }
+  return { className: 'search-wave-row' };
+}
 
 function ArtistAvatar({ url }: { url: string | null }) {
   const src = normalizeCoverUrl(url, '200x200');
@@ -48,6 +74,8 @@ export function Search({ active, fromHome, onBack, onOpenArtist, onPlay, onMenu 
   const [error, setError] = useState('');
   const [artists, setArtists] = useState<ArtistCard[]>([]);
   const [tracks, setTracks] = useState<CatalogTrack[]>([]);
+  const [waves, setWaves] = useState<PromoCard[]>([]);
+  const [lumen, setLumen] = useState<PromoCard | null>(null);
 
   const run = () => {
     const q = query.trim();
@@ -58,9 +86,13 @@ export function Search({ active, fromHome, onBack, onOpenArtist, onPlay, onMenu 
         if (Array.isArray(body)) {
           setArtists([]);
           setTracks(body);
+          setWaves([]);
+          setLumen(null);
         } else {
           setArtists(Array.isArray(body?.artists) ? body.artists : []);
           setTracks(Array.isArray(body?.tracks) ? body.tracks : []);
+          setWaves((body?.waves || []).filter((item) => item && item.title && item.title.trim().toLowerCase() !== 'моя волна'));
+          setLumen(body?.lumen && body.lumen.title ? body.lumen : null);
         }
         setStatus('done');
       })
@@ -70,7 +102,8 @@ export function Search({ active, fromHome, onBack, onOpenArtist, onPlay, onMenu 
       });
   };
 
-  const nothingFound = status === 'done' && artists.length === 0 && tracks.length === 0;
+  const nothingFound = status === 'done' && artists.length === 0 && tracks.length === 0 && waves.length === 0 && !lumen;
+  const showPromos = status === 'done' && (waves.length > 0 || lumen);
 
   return (
     <section className={active ? 'screen active' : 'screen'} id="screenSearch">
@@ -104,6 +137,51 @@ export function Search({ active, fromHome, onBack, onOpenArtist, onPlay, onMenu 
           }}
         />
       </div>
+
+      {showPromos ? (
+        <ul className="search-wave-list" id="searchWaves">
+          {lumen ? (
+            <li>
+              <button
+                type="button"
+                id="btnSearchLumen"
+                {...waveRowProps(lumen)}
+                onClick={() => {
+                  const prompt = (lumen.title || query).trim().slice(0, 300);
+                  if (!prompt) return;
+                  send({ command: 'start_wave', source: 'lumen', prompt });
+                }}
+              >
+                <WaveCover url={lumen.cover_url} />
+                <span className="search-wave-copy">
+                  <span className="search-wave-title">{lumen.title}</span>
+                  {lumen.subtitle ? <span className="search-wave-sub">{lumen.subtitle}</span> : null}
+                </span>
+              </button>
+            </li>
+          ) : null}
+          {waves.map((wave, index) => (
+            <li key={`${wave.title}-${index}`}>
+              <button
+                type="button"
+                {...waveRowProps(wave)}
+                onClick={() => send({
+                  command: 'start_wave',
+                  source: 'personal',
+                  card_title: wave.title,
+                  card_index: index,
+                })}
+              >
+                <WaveCover url={wave.cover_url} />
+                <span className="search-wave-copy">
+                  <span className="search-wave-title">{wave.title}</span>
+                  {wave.subtitle ? <span className="search-wave-sub">{wave.subtitle}</span> : null}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       {status === 'loading' ? <p className="list-meta">Ищем в приложении…</p> : null}
       {status === 'error' ? <p className="list-meta">{error}</p> : null}

@@ -66,7 +66,7 @@ function armWaiter(command: ClientCommand): void {
     kind = 'play';
     expectedTitle = command.title.trim().toLowerCase();
     expectedKey = `${command.artist.trim()}|${command.title.trim()}`.toLowerCase();
-  } else if (command.command === 'play_artist' || command.command === 'play_album') {
+  } else if (command.command === 'play_artist' || command.command === 'play_album' || command.command === 'start_wave') {
     kind = 'play';
     anyPlay = true;
   } else if (command.command === 'play_queue_track') {
@@ -84,6 +84,7 @@ function shouldWait(command: ClientCommand, forced: boolean): boolean {
   return command.command === 'play_now'
     || command.command === 'play_artist'
     || command.command === 'play_album'
+    || command.command === 'start_wave'
     || command.command === 'play_next'
     || command.command === 'add_to_queue'
     || command.command === 'play_queue_track';
@@ -167,6 +168,7 @@ function parsePlayback(raw: Record<string, unknown>): PlaybackFields {
     shuffle: raw.shuffle === true,
     liked: typeof raw.liked === 'boolean' ? raw.liked : null,
     queue_name: text(raw.queue_name),
+    context_label: text(raw.context_label),
   };
 }
 

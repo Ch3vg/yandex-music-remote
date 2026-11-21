@@ -1,0 +1,71 @@
+.wave-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  min-height: 68px;
+  margin: 0 0 14px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 18px;
+  color: #fff;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+.wave-banner::before {
+  content: "";
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  bottom: -46%;
+  height: 78%;
+  background: radial-gradient(60% 80% at 50% 0%, rgba(255, 255, 255, 0.38), transparent 70%);
+  pointer-events: none;
+}
+.wave-banner--art {
+  color: #fff;
+  background-size: cover;
+  background-position: center;
+}
+.wave-banner--art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.5));
+  pointer-events: none;
+}
+.wave-banner--art .wave-banner-kicker,
+.wave-banner--art .wave-banner-line {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.wave-banner--collection,
+.wave-banner--playlist {
+  background: linear-gradient(100deg, #ff5cab 0%, #e21878 42%, #ff4ad4 100%);
+}
+.wave-banner--track {
+  background: linear-gradient(100deg, #c8c2b6 0%, #9a958c 48%, #d5d0c6 100%);
+  color: #1a1a1c;
+}
+.wave-banner:disabled { opacity: 0.45; }
+.wave-banner-kicker,
+.wave-banner-line {
+  position: relative;
+  z-index: 1;
+}
+.wave-banner-kicker {
+  font-size: 0.98rem;
+  font-weight: 650;
+}
+.wave-banner-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  font-size: 1.05rem;
+  font-weight: 750;
+}
+.wave-banner-play { font-size: 0.72rem; }

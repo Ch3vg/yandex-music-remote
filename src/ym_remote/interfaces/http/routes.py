@@ -118,6 +118,12 @@ async def api_search(request: Request, q: str = ""):
     return SearchResponseWire.from_view(view).model_dump()
 
 
+@router.get("/api/library/wave-background")
+async def library_wave_background(request: Request):
+    cover, background = await request.app.state.services.wave_art.snapshot()
+    return {"cover_url": cover, "background": background}
+
+
 @router.get("/api/library/home")
 async def library_home(request: Request):
     try:

@@ -201,12 +201,31 @@ class ArtistFamiliarWire(BaseModel):
         )
 
 
+class PromoCardWire(BaseModel):
+    title: str
+    subtitle: str = ""
+    cover_url: str | None = None
+    background: str | None = None
+
+
 class SearchResponseWire(BaseModel):
     artists: list[ArtistCardWire] = Field(default_factory=list)
     tracks: list[CatalogTrackWire] = Field(default_factory=list)
+    waves: list[PromoCardWire] = Field(default_factory=list)
+    lumen: PromoCardWire | None = None
 
     @classmethod
     def from_view(cls, view: SearchView) -> SearchResponseWire:
+        def card(raw):
+            if raw is None:
+                return None
+            return PromoCardWire(
+                title=raw.title,
+                subtitle=raw.subtitle or "",
+                cover_url=raw.cover_url,
+                background=getattr(raw, "background", None),
+            )
+
         return cls(
             artists=[
                 ArtistCardWire.from_artist(artist)
@@ -214,6 +233,8 @@ class SearchResponseWire(BaseModel):
                 if artist.id is not None
             ],
             tracks=[CatalogTrackWire.from_track(track) for track in view.tracks],
+            waves=[item for item in (card(raw) for raw in view.waves) if item is not None],
+            lumen=card(view.lumen),
         )
 
 

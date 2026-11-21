@@ -9,7 +9,6 @@ import { Toasts } from '../chrome/Toasts';
 import {
   type ArtistChipItem,
   resolveArtistChipClick,
-  resolveArtistsForPlayer,
   resolveArtistsForTrack,
   type ResolvedArtist,
 } from '../lib/artistResolver';
@@ -33,6 +32,7 @@ import type { ArtistTracksMode, PlayerPhase, RouteEntry } from './screen';
 type ActionsState = {
   track: CatalogTrack;
   context: PlayContext | null;
+  playback?: boolean;
 };
 
 function findLastRoute<K extends RouteEntry['screen']>(
@@ -289,23 +289,22 @@ export function App() {
     [openResolvedArtists],
   );
 
-  const handlePlayerArtistClick = useCallback(() => {
+  const openPlayerTrackMenu = useCallback(() => {
     const view = getSnapshot();
-    const token = ++resolveTokenRef.current;
-    void resolveArtistsForPlayer({
+    const current = view.queue?.current;
+    const trackId = Number(current?.track_id);
+    const albumRaw = Number(current?.album_id);
+    const track: CatalogTrack = {
+      id: Number.isFinite(trackId) && trackId > 0 ? trackId : 0,
+      album_id: Number.isFinite(albumRaw) && albumRaw > 0 ? albumRaw : null,
+      title: view.title === '—' ? '' : view.title,
+      artist: view.artist === '—' ? '' : view.artist,
       artists: view.artists,
-      artistHref: view.artistHref,
-      title: view.title,
-      artist: view.artist,
-    }).then((resolved) => {
-      if (token !== resolveTokenRef.current) return;
-      const subtitle = view.title === '—' ? '' : view.title;
-      const artistLine = view.artist === '—' ? '' : view.artist;
-      openResolvedArtists(resolved, subtitle, artistLine, () => {
-        send({ command: 'navigate', target: 'artist' });
-      });
-    });
-  }, [openResolvedArtists]);
+      cover_url: view.coverUrl,
+      cover_url_hq: view.coverHq,
+    };
+    setActionsState({ track, context: null, playback: true });
+  }, []);
 
   const playWithContext = useCallback((track: CatalogTrack, mode: PlayMode, context: PlayContext | null) => {
     const command = buildPlayCommand(mode, track, context);
@@ -319,7 +318,7 @@ export function App() {
   }, []);
 
   const openActions = useCallback((track: CatalogTrack, context: PlayContext | null) => {
-    setActionsState({ track, context });
+    setActionsState({ track, context, playback: false });
   }, []);
 
   const handleActionSelect = useCallback(
@@ -448,7 +447,7 @@ export function App() {
           phase={phase}
           onClose={closePlayer}
           onQueue={() => setQueueOpen(true)}
-          onArtist={handlePlayerArtistClick}
+          onTrackMenu={openPlayerTrackMenu}
         />
         <Volume active={screen === 'volume'} />
         <More active={screen === 'more'} />
@@ -469,6 +468,7 @@ export function App() {
       />
       <TrackActions
         track={actionsState?.track ?? null}
+        playback={actionsState?.playback === true}
         onClose={() => setActionsState(null)}
         onAction={handleActionSelect}
         onSelectArtist={handleTrackArtistSelect}

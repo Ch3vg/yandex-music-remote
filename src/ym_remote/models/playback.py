@@ -24,6 +24,7 @@ class Playback:
     liked: bool
     queue_name: str
     artists: tuple[Artist, ...] = ()
+    context_label: str = ""
 
     def track_key(self) -> str:
         return f"{self.artist}|{self.title}"

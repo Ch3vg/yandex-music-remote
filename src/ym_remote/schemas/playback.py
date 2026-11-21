@@ -30,6 +30,7 @@ class PlaybackWire(BaseModel):
     shuffle: bool = False
     liked: bool = False
     queue_name: str = ""
+    context_label: str = ""
     artists: list[ArtistRefWire] = Field(default_factory=list)
 
     @classmethod
@@ -53,6 +54,7 @@ class PlaybackWire(BaseModel):
             shuffle=playback.shuffle,
             liked=playback.liked,
             queue_name=playback.queue_name,
+            context_label=playback.context_label,
             artists=[ArtistRefWire.from_artist(artist) for artist in playback.artists],
         )
 

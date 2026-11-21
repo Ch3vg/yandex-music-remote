@@ -6,7 +6,7 @@ from dataclasses import replace
 from ym_remote.cdp.session import CdpError, CdpUnavailable
 from ym_remote.cdp.transport import TransportCdpAdapter
 from ym_remote.models.errors import RemoteError
-from ym_remote.models.requests import PlayRequest
+from ym_remote.models.requests import PlayRequest, WaveRequest
 from ym_remote.services.gate import HeavyGate
 from ym_remote.services.library import LibraryService
 from ym_remote.services.texts import (
@@ -20,6 +20,8 @@ from ym_remote.services.texts import (
     PLAYLIST_ACTION_FAILED,
     PLAY_DESKTOP_FAILED,
     PLAY_FAILED,
+    WAVE_FAILURES,
+    WAVE_NEED_TRACK,
     REPEAT_BUTTON_MISSING,
     REPEAT_FAILED,
     SEEK_FAILED,
@@ -201,6 +203,18 @@ class TransportService:
             except CdpError as exc:
                 raise RemoteError(ALBUM_PLAY_FAILED) from exc
         raise RemoteError(ALBUM_PLAY_FAILED)
+
+    async def start_wave(self, request: WaveRequest) -> None:
+        failed = WAVE_FAILURES.get(request.source, WAVE_FAILURES["personal"])
+        async with self.gate.hold():
+            try:
+                code = await self.adapter.start_wave(request)
+            except _CDP_FAILURES as exc:
+                raise RemoteError(failed) from exc
+        if code == "no_track":
+            raise RemoteError(WAVE_NEED_TRACK)
+        if code not in _PLAY_OK:
+            raise RemoteError(failed)
 
     async def play_now(self, request: PlayRequest) -> None:
         if request.album_id is None and request.context_album_id is not None:

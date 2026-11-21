@@ -67,6 +67,59 @@ function ymText(el) {
   walk(el);
   return chunks.join("").trim();
 }
+function ymUsableArtUrl(raw) {
+  if (!raw) return "";
+  let url = String(raw).trim().replace(/^['"]|['"]$/g, "");
+  if (!url || /^blob:/i.test(url)) return "";
+  if (/^data:/i.test(url)) {
+    if (url.length > 24000 || !/^data:image\//i.test(url)) return "";
+    return url;
+  }
+  if (url.startsWith("//")) url = "https:" + url;
+  if (/^https?:\/\//i.test(url)) return url;
+  return "";
+}
+function ymFirstArtUrl(value) {
+  const text = String(value || "");
+  const re = /url\(\s*(['"]?)([^)'"]*)\1\s*\)/gi;
+  let match;
+  while ((match = re.exec(text))) {
+    const url = ymUsableArtUrl(match[2]);
+    if (url) return url;
+  }
+  return "";
+}
+function ymCardArt(node) {
+  const empty = { cover: "", background: "" };
+  if (!node) return empty;
+  const imgs = node.matches && node.matches("img") ? [node] : Array.from(node.querySelectorAll("img"));
+  for (const img of imgs) {
+    const url = ymUsableArtUrl(img.currentSrc || img.getAttribute("src") || "");
+    if (url) return { cover: url, background: "" };
+  }
+  const nodes = [node].concat(Array.from(node.querySelectorAll("*"))).slice(0, 24);
+  for (const el of nodes) {
+    let image = "";
+    const inline = (el.getAttribute && el.getAttribute("style")) || "";
+    try { image = getComputedStyle(el).backgroundImage || ""; } catch (e) { image = ""; }
+    const url = ymFirstArtUrl(image) || ymFirstArtUrl(inline);
+    if (url) return { cover: url, background: "" };
+  }
+  let image = "";
+  let color = "";
+  const inline = (node.getAttribute && node.getAttribute("style")) || "";
+  try {
+    const style = getComputedStyle(node);
+    image = style.backgroundImage || "";
+    color = style.backgroundColor || "";
+  } catch (e) {}
+  const candidate = [image, inline, color].find((part) => {
+    if (!part || part === "none" || part === "transparent" || part === "rgba(0, 0, 0, 0)") return false;
+    if (/blob:/i.test(part) || /url\(\s*['"]?\s*['"]?\s*\)/i.test(part)) return false;
+    return /gradient\(|background|^#|rgb\(|hsl\(/i.test(part) && part.length < 2000;
+  });
+  return { cover: "", background: candidate || "" };
+}
 function ymFindRepeat() {
   const full = ymById("FULLSCREEN_PLAYER_MODAL");
   if (full && ymVisible(full)) {
@@ -322,11 +375,20 @@ if (!albumHref) {
   if (coverButton && coverButton.href) albumHref = coverButton.href;
 }
 let queueName = "";
-const nameIds = ["FULLSCREEN_PLAYER_CONTEXT_TITLE", "FULLSCREEN_PLAYER_HEADER_TITLE", "PLAYER_CONTEXT_TITLE", "CONTEXT_TITLE", "PLAY_QUEUE_NOW_PLAYING_BLOCK_TITLE"];
+let contextLabel = "";
+const playingSubtitle = ymText(ymById("PLAY_QUEUE_NOW_PLAYING_BLOCK_SUBTITLE"));
+const playingTitle = ymText(ymById("PLAY_QUEUE_NOW_PLAYING_BLOCK_TITLE"));
+if (playingTitle) queueName = playingTitle;
+if (playingSubtitle && playingSubtitle.replace(/\s+/g, " ").trim().toLowerCase() !== "сейчас играет") {
+  contextLabel = playingSubtitle;
+}
+const nameIds = ["FULLSCREEN_PLAYER_CONTEXT_TITLE", "FULLSCREEN_PLAYER_HEADER_TITLE", "PLAYER_CONTEXT_TITLE", "CONTEXT_TITLE"];
 const modal = ymById("FULLSCREEN_PLAYER_MODAL");
-for (const id of nameIds) {
-  const el = (modal && ymById(id, modal)) || ymById(id);
-  if (el && ymText(el)) { queueName = ymText(el); break; }
+if (!queueName) {
+  for (const id of nameIds) {
+    const el = (modal && ymById(id, modal)) || ymById(id);
+    if (el && ymText(el)) { queueName = ymText(el); break; }
+  }
 }
 if (!queueName) {
   const reset = ymById("RESET_VIBE_CONTEXT_BUTTON");
@@ -348,7 +410,7 @@ if (!queueName) {
 return {
   title, artists, artist_refs: artistRefs, cover_url: cover || null, is_playing: isPlaying, volume,
   position_sec: position, duration_sec: duration, repeat_mode: repeatMode,
-  shuffle, liked, artist_href: artistHref, album_href: albumHref, queue_name: queueName
+  shuffle, liked, artist_href: artistHref, album_href: albumHref, queue_name: queueName, context_label: contextLabel
 };
 """
     )
@@ -1146,7 +1208,32 @@ for (const anchor of searchScope.querySelectorAll('a[href*="artist"]')) {
   const cover = img ? (img.getAttribute("src") || "") : "";
   artistCards.push({ id: artistId, name, cover });
 }
-return { ok: true, tracks, artist_cards: artistCards };
+function ownLine(node, testId) {
+  const el = ymById(testId, node);
+  return el ? ymText(el).replace(/\s+/g, " ").trim() : "";
+}
+const waves = [];
+let lumen = null;
+const lumenNode = ymById("QUERY_TO_VIBE_BLOCK", searchScope);
+if (lumenNode) {
+  const title = ownLine(lumenNode, "ENTITY_CARD_ENTITY_META_TITLE");
+  const subtitle = ownLine(lumenNode, "ENTITY_CARD_ENTITY_META_DESCRIPTION");
+  if (title && title.toLowerCase() !== "моя волна") {
+    const art = ymCardArt(lumenNode.parentElement || lumenNode);
+    lumen = { title, subtitle, cover: art.cover || "", background: art.background || "" };
+  }
+}
+for (const node of searchScope.querySelectorAll('[data-test-id="SEARCH_VIBE_CARD"]')) {
+  if (waves.length >= 20) break;
+  if (lumenNode && lumenNode.contains(node)) continue;
+  const title = ownLine(node, "ENTITY_CARD_ENTITY_META_TITLE");
+  const subtitle = ownLine(node, "ENTITY_CARD_ENTITY_META_DESCRIPTION");
+  if (!title || title.toLowerCase() === "моя волна") continue;
+  if ((subtitle || "").toLowerCase().includes("люмен")) continue;
+  const art = ymCardArt(node);
+  waves.push({ title, subtitle, cover: art.cover || "", background: art.background || "" });
+}
+return { ok: true, tracks, artist_cards: artistCards, waves, lumen };
 """,
         QUERY=query,
     )
@@ -2006,4 +2093,460 @@ return "ok";
         TRACK_ID=track_id,
         INDEX=index,
         ACTION=action,
+    )
+
+
+def wave_background_script() -> str:
+    """Фон карточки «Моя волна» на уже открытой главной. Страницу не переключает."""
+    return script(
+        r"""
+function homeWaveNode(root) {
+  if (!root) return null;
+  let best = null;
+  let bestArea = Infinity;
+  const nodes = root.querySelectorAll("[data-test-id], a, button, article, section, div");
+  for (const node of nodes) {
+    const text = ymText(node).replace(/\s+/g, " ").trim().toLowerCase();
+    const id = (node.getAttribute("data-test-id") || "").toUpperCase();
+    if (!text && !id) continue;
+    if (text.includes("люмен") || id.includes("LUMEN") || id.includes("PLAYER") || id.includes("QUEUE")) continue;
+    const home = text.startsWith("моя волна") || id.includes("MY_WAVE") || id.includes("VIBE_BUTTON") || id.includes("PERSONAL_VIBE");
+    if (!home) continue;
+    const rect = node.getBoundingClientRect();
+    const area = rect.width * rect.height;
+    if (area < 40 || area >= bestArea) continue;
+    best = node;
+    bestArea = area;
+  }
+  return best;
+}
+const card = homeWaveNode(document.querySelector("main") || document.body);
+if (!card) return { ok: false };
+const art = ymCardArt(card);
+return { ok: true, cover: art.cover || "", background: art.background || "" };
+"""
+    )
+
+
+def personal_wave_script(card_title: str | None = None, card_index: int | None = None) -> str:
+    """Карточка в уже открытой выдаче, иначе карточка на главной десктопа.
+
+    card_title или card_index кликают конкретную строку волны в открытом поиске.
+    """
+    return fill(
+        r"""
+const wantTitle = String(__CARD_TITLE__ || "").trim().toLowerCase();
+const wantIndex = __CARD_INDEX__;
+function folded(el) {
+  return ymText(el).replace(/\s+/g, " ").trim().toLowerCase();
+}
+function isLumenText(text) {
+  return text.includes("люмен");
+}
+function isWaveText(text) {
+  return text.includes("моя волна") && !isLumenText(text);
+}
+function clickable(el) {
+  if (!el) return null;
+  const inner = el.matches && el.matches("a,button") ? el : el.querySelector("a,button");
+  const target = inner || el;
+  return ymVisible(target, 8) ? target : (ymVisible(el, 8) ? el : null);
+}
+function waveCards(root) {
+  const found = [];
+  if (!root) return found;
+  const lumenNode = ymById("QUERY_TO_VIBE_BLOCK", root);
+  for (const node of root.querySelectorAll('[data-test-id="SEARCH_VIBE_CARD"]')) {
+    if (lumenNode && lumenNode.contains(node)) continue;
+    const titleEl = ymById("ENTITY_CARD_ENTITY_META_TITLE", node);
+    const title = (titleEl ? ymText(titleEl) : "").replace(/\s+/g, " ").trim().toLowerCase();
+    if (!title || title === "моя волна") continue;
+    const play = node.querySelector('[data-test-id="PLAY_BUTTON"]');
+    const target = (play && ymVisible(play, 8)) ? play : clickable(node);
+    if (!target) continue;
+    found.push({ title, el: target });
+  }
+  return found;
+}
+function homeCard(root) {
+  if (!root) return null;
+  const nodes = root.querySelectorAll("[data-test-id], a, button, article, section");
+  for (const node of nodes) {
+    const text = folded(node);
+    const id = (node.getAttribute("data-test-id") || "").toUpperCase();
+    if (isLumenText(text) || id.includes("PLAYER") || id.includes("QUEUE")) continue;
+    const home = text.startsWith("моя волна") || id.includes("MY_WAVE") || id.includes("VIBE_BUTTON") || id.includes("PERSONAL_VIBE");
+    if (!home) continue;
+    const target = clickable(node);
+    if (target) return target;
+  }
+  return null;
+}
+const aimed = !!(wantTitle || (typeof wantIndex === "number" && wantIndex >= 0));
+const searchPage = ymById("SEARCH_PAGE");
+if (aimed) {
+  if (!searchPage) return "fail";
+  const cards = waveCards(searchPage);
+  let card = null;
+  if (wantTitle) card = cards.find((item) => item.title === wantTitle) || null;
+  if (!card && typeof wantIndex === "number" && wantIndex >= 0) card = cards[wantIndex] || null;
+  if (!card) return "fail";
+  ymClick(card.el);
+  return "started";
+}
+if (!location.pathname.includes("/collection")) await ymInAppGo("/collection");
+let likesPath = "";
+for (let step = 0; step < 25 && !likesPath; step++) {
+  const block = ymById("COLLECTION_PLAYLIST_WITH_LIKES");
+  const link = block && block.querySelector('a[href*="playlistUuid="]');
+  const href = link ? (link.getAttribute("href") || "") : "";
+  const match = href.match(/playlistUuid=([^&]+)/);
+  if (match) likesPath = "/playlists?playlistUuid=" + match[1];
+  else await ymSleep(200);
+}
+if (!likesPath) return "fail";
+const likesKey = likesPath.split("playlistUuid=")[1];
+if (!location.href.includes(likesKey)) await ymInAppGo(likesPath);
+for (let step = 0; step < 30; step++) {
+  await ymSleep(200);
+  if (!location.href.includes(likesKey)) {
+    if (step === 8) await ymInAppGo(likesPath);
+    continue;
+  }
+  const header = ymById("ENTITY_HEADER") || document.querySelector("main");
+  const menuButton = header && ymById("PLAYLIST_HEADER_CONTEXT_MENU_BUTTON", header);
+  if (!menuButton || !ymVisible(menuButton, 8)) continue;
+  ymClick(menuButton);
+  await ymSleep(480);
+  const menus = Array.from(document.querySelectorAll('[role="menu"]')).filter((menu) => ymVisible(menu, 8));
+  const item = (menus[0] || document).querySelector('[data-test-id="CONTEXT_MENU_VIBE_BUTTON"]');
+  if (!item || !ymVisible(item, 8)) { ymPressEscape(); continue; }
+  const label = ymText(item).replace(/\s+/g, " ").trim().toLowerCase();
+  if (label.includes("по треку")) { ymPressEscape(); continue; }
+  const key = Object.keys(item).find((name) => name.startsWith("__reactProps"));
+  const handler = key && item[key] && item[key].onClick;
+  if (typeof handler === "function") {
+    try {
+      handler({
+        preventDefault() {},
+        stopPropagation() {},
+        nativeEvent: { stopPropagation() {} },
+        currentTarget: item,
+        target: item,
+        button: 0,
+        type: "click",
+      });
+    } catch (error) {}
+  }
+  ymClick(item);
+  return "started";
+}
+return "fail";
+""",
+        CARD_TITLE=card_title or "",
+        CARD_INDEX=card_index,
+    )
+
+
+def current_wave_script() -> str:
+    return script(
+        r"""
+const bar = ymById("PLAYERBAR_DESKTOP") || ymById("FULLSCREEN_PLAYER_MODAL") || ymById("VIBE_PLAYERBAR");
+if (!bar) return "no_track";
+const title = ymText(ymById("TRACK_TITLE", bar)) || ymText(ymById("VIBE_PLAYERBAR_TRACK_NAME", bar)) || ymText(ymById("VIBE_PLAYERBAR_TRACK_NAME"));
+if (!title) return "no_track";
+function waveLabel(el) {
+  const id = ((el && el.getAttribute("data-test-id")) || "").toUpperCase();
+  const text = (((el && el.getAttribute("aria-label")) || "") + " " + ymText(el)).replace(/\s+/g, " ").trim().toLowerCase();
+  if (id.includes("LUMEN") || text.includes("люмен")) return false;
+  return text.includes("волн") || id.includes("VIBE_CONTEXT") || id.includes("TRACK_VIBE") || id.includes("MY_WAVE");
+}
+function visibleWave(root) {
+  if (!root) return null;
+  const named = root.querySelector('[data-test-id="CONTEXT_MENU_VIBE_BUTTON"]');
+  if (named && waveLabel(named) && ymVisible(named, 8)) return named;
+  const hits = [];
+  for (const el of root.querySelectorAll("button, a, [role='button'], [data-test-id]")) {
+    if (!waveLabel(el) || !ymVisible(el, 8)) continue;
+    hits.push(el);
+  }
+  const leaf = hits.find((el) => !hits.some((other) => other !== el && el.contains(other)));
+  return leaf || null;
+}
+let button = visibleWave(bar);
+if (button) { ymClick(button); return "started"; }
+const menuButton = ymById("CONTEXT_MENU_BUTTON", bar) || ymById("TRACK_CONTEXT_MENU_BUTTON", bar) || bar.querySelector('[aria-label*="ещё"], [aria-label*="меню"]');
+if (menuButton && ymVisible(menuButton, 8)) {
+  ymClick(menuButton);
+  await ymSleep(450);
+  const menus = Array.from(document.querySelectorAll('[data-test-id="TRACK_CONTEXT_MENU"], [role="menu"]')).filter((menu) => ymVisible(menu));
+  button = visibleWave(menus[0] || document.body);
+  if (button) { ymClick(button); return "started"; }
+  ymPressEscape();
+}
+return "fail";
+"""
+    )
+
+
+def _entity_wave_script(body: str, **values: object) -> str:
+    shared = r"""
+function waveLabel(el) {
+  const id = ((el && el.getAttribute("data-test-id")) || "").toUpperCase();
+  const text = (((el && el.getAttribute("aria-label")) || "") + " " + ymText(el)).replace(/\s+/g, " ").trim().toLowerCase();
+  if (!text.includes("волн") && !id.includes("VIBE") && !id.includes("MY_WAVE") && !id.includes("WAVE")) return false;
+  if (id.includes("PLAYER") || id.includes("QUEUE") || id.includes("RESET_VIBE") || text.includes("люмен")) return false;
+  return true;
+}
+function visibleWave(root) {
+  if (!root) return null;
+  const named = root.querySelector('[data-test-id="CONTEXT_MENU_VIBE_BUTTON"]');
+  if (named && waveLabel(named) && ymVisible(named, 8)) return named;
+  const hits = [];
+  for (const el of root.querySelectorAll("button, a, [role='menuitem'], [role='button'], [data-test-id]")) {
+    if (!waveLabel(el) || !ymVisible(el, 8)) continue;
+    if (el.closest('[data-test-id="PLAY_QUEUE"], [data-test-id="PLAYERBAR_DESKTOP"], [data-test-id="FULLSCREEN_PLAYER_MODAL"], [data-test-id="VIBE_PLAYERBAR"]')) continue;
+    hits.push(el);
+  }
+  const leaf = hits.find((el) => !hits.some((other) => other !== el && el.contains(other)));
+  return leaf || null;
+}
+async function pressHeaderWave(menuId) {
+  const header = ymById("ENTITY_HEADER") || document.querySelector("main");
+  const menuButton = (header && ymById(menuId, header)) || (header && header.querySelector('[data-test-id$="HEADER_CONTEXT_MENU_BUTTON"]'));
+  if (!menuButton || !ymVisible(menuButton, 8)) return false;
+  if (menuButton.closest('[data-test-id="TRACK_PLAYLIST"], [data-test-id="TRACK_ALBUM"], [data-test-id="virtuoso-item-list"]')) return false;
+  ymClick(menuButton);
+  await ymSleep(480);
+  const menus = Array.from(document.querySelectorAll('[role="menu"]')).filter((menu) => ymVisible(menu, 8));
+  const item = visibleWave(menus[0] || null);
+  if (!item) { ymPressEscape(); return false; }
+  const label = ymText(item).replace(/\s+/g, " ").trim().toLowerCase();
+  if (label.includes("по треку")) { ymPressEscape(); return false; }
+  const key = Object.keys(item).find((name) => name.startsWith("__reactProps"));
+  const handler = key && item[key] && item[key].onClick;
+  if (typeof handler === "function") {
+    try {
+      handler({
+        preventDefault() {},
+        stopPropagation() {},
+        nativeEvent: { stopPropagation() {} },
+        currentTarget: item,
+        target: item,
+        button: 0,
+        type: "click",
+      });
+    } catch (error) {}
+  }
+  ymClick(item);
+  return true;
+}
+async function pressWave(scope) {
+  const menuButton = (scope && ymById("TRACK_HEADER_CONTEXT_MENU_BUTTON", scope)) || ymById("TRACK_HEADER_CONTEXT_MENU_BUTTON");
+  if (!menuButton || !ymVisible(menuButton, 8)) return false;
+  ymClick(menuButton);
+  await ymSleep(480);
+  const menus = Array.from(document.querySelectorAll('[data-test-id="TRACK_CONTEXT_MENU"], [role="menu"]')).filter((menu) => ymVisible(menu));
+  const item = visibleWave(menus[0] || document.body);
+  if (!item) { ymPressEscape(); return false; }
+  ymClick(item);
+  return true;
+}
+"""
+    return fill(shared + body, **values)
+
+
+def track_wave_script(track_id: int, album_id: int) -> str:
+    return _entity_wave_script(
+        r"""
+const trackId = String(__TRACK_ID__);
+const albumId = String(__ALBUM_ID__);
+function onTrackPage() {
+  const href = location.href;
+  return href.includes("trackId=" + trackId) && href.includes("albumId=" + albumId);
+}
+if (!onTrackPage()) {
+  await ymInAppGo("/album/track?albumId=" + encodeURIComponent(albumId) + "&trackId=" + encodeURIComponent(trackId));
+}
+for (let step = 0; step < 40; step++) {
+  await ymSleep(250);
+  if (step === 8 && !onTrackPage()) {
+    await ymInAppGo("/album/track?albumId=" + encodeURIComponent(albumId) + "&trackId=" + encodeURIComponent(trackId));
+  }
+  if (!onTrackPage()) continue;
+  const page = ymById("TRACK_PAGE") || document.querySelector("main");
+  if (await pressWave(page)) return "started";
+}
+return "fail";
+""",
+        TRACK_ID=track_id,
+        ALBUM_ID=album_id,
+    )
+
+
+def artist_wave_script(artist_id: int) -> str:
+    return _entity_wave_script(
+        r"""
+const artistId = String(__ARTIST_ID__);
+function onArtist() {
+  try {
+    const url = new URL(location.href);
+    if (url.searchParams.get("artistId") === artistId) {
+      return !url.pathname.includes("/tracks") && !url.pathname.includes("/familiar");
+    }
+    const parts = url.pathname.split("/").filter(Boolean);
+    const at = parts.lastIndexOf("artist");
+    return at >= 0 && parts[at + 1] === artistId && parts.length === at + 2;
+  } catch (error) { return false; }
+}
+if (!onArtist()) await ymInAppGo("/artist?artistId=" + encodeURIComponent(artistId));
+for (let step = 0; step < 40; step++) {
+  await ymSleep(250);
+  if (step === 8 && !onArtist()) await ymInAppGo("/artist/" + encodeURIComponent(artistId));
+  if (!onArtist()) continue;
+  if (await pressHeaderWave("ARTIST_HEADER_CONTEXT_MENU_BUTTON")) return "started";
+}
+return "fail";
+""",
+        ARTIST_ID=artist_id,
+    )
+
+
+def album_wave_script(album_id: int) -> str:
+    return _entity_wave_script(
+        r"""
+const albumId = String(__ALBUM_ID__);
+function onAlbum() {
+  try {
+    const url = new URL(location.href);
+    if (url.searchParams.get("trackId")) return false;
+    if (url.searchParams.get("albumId") === albumId) return true;
+    const parts = url.pathname.split("/").filter(Boolean);
+    const at = parts.lastIndexOf("album");
+    return at >= 0 && parts[at + 1] === albumId && !parts.includes("track");
+  } catch (error) { return false; }
+}
+if (!onAlbum()) await ymInAppGo("/album?albumId=" + encodeURIComponent(albumId));
+for (let step = 0; step < 40; step++) {
+  await ymSleep(250);
+  if (step === 8 && !onAlbum()) await ymInAppGo("/album/" + encodeURIComponent(albumId));
+  if (!onAlbum()) continue;
+  if (await pressHeaderWave("ALBUM_HEADER_CONTEXT_MENU_BUTTON")) return "started";
+}
+return "fail";
+""",
+        ALBUM_ID=album_id,
+    )
+
+
+def playlist_wave_script(playlist_uuid: str, playlist_kind: int | None, playlist_uid: int | None) -> str:
+    return _entity_wave_script(
+        r"""
+const playlistUuid = String(__PLAYLIST_UUID__);
+const playlistKind = __PLAYLIST_KIND__ == null ? "" : String(__PLAYLIST_KIND__);
+const playlistUid = __PLAYLIST_UID__ == null ? "" : String(__PLAYLIST_UID__);
+function onPlaylist() {
+  try {
+    const url = new URL(location.href);
+    if (url.searchParams.get("playlistUuid") === playlistUuid) return true;
+    if (playlistKind && playlistUid) {
+      return url.pathname.includes("/users/" + playlistUid + "/playlists/" + playlistKind);
+    }
+    return false;
+  } catch (error) { return false; }
+}
+function openPlaylist() {
+  return "/playlists?playlistUuid=" + encodeURIComponent(playlistUuid);
+}
+if (!onPlaylist()) await ymInAppGo(openPlaylist());
+for (let step = 0; step < 40; step++) {
+  await ymSleep(250);
+  if (step === 8 && !onPlaylist()) await ymInAppGo("/playlists?playlistUuid=" + encodeURIComponent(playlistUuid));
+  if (!onPlaylist()) continue;
+  if (await pressHeaderWave("PLAYLIST_HEADER_CONTEXT_MENU_BUTTON")) return "started";
+}
+return "fail";
+""",
+        PLAYLIST_UUID=playlist_uuid,
+        PLAYLIST_KIND=playlist_kind,
+        PLAYLIST_UID=playlist_uid,
+    )
+
+
+def lumen_script(prompt: str) -> str:
+    return fill(
+        r"""
+const prompt = __PROMPT__;
+function isLumen(el) {
+  if (!el) return false;
+  const id = (el.getAttribute("data-test-id") || "").toUpperCase();
+  const text = (((el.getAttribute("aria-label") || "") + " " + ymText(el)).replace(/\s+/g, " ").trim().toLowerCase());
+  if (el.closest && el.closest('[data-test-id="SEARCH_TRACK_CARD"], [data-test-id="PLAYERBAR_DESKTOP"], [data-test-id="VIBE_PLAYERBAR"]')) return false;
+  return id.includes("LUMEN") || text.includes("люмен");
+}
+function lumenCard(root) {
+  if (!root) return null;
+  const exact = ymById("QUERY_TO_VIBE_BLOCK", root);
+  if (exact && ymVisible(exact, 8)) return exact;
+  const wanted = String(prompt || "").trim().toLowerCase();
+  const nodes = root.querySelectorAll("a, button, li, article, [data-test-id]");
+  const matches = [];
+  for (const node of nodes) {
+    if (!isLumen(node)) continue;
+    let deeper = false;
+    for (const child of node.querySelectorAll("a, button, li, article")) {
+      if (child !== node && isLumen(child)) { deeper = true; break; }
+    }
+    if (deeper) continue;
+    matches.push(node);
+  }
+  if (wanted) {
+    const named = matches.find((node) => ymText(node).toLowerCase().includes(wanted));
+    if (named) return named;
+  }
+  return matches[0] || null;
+}
+async function ensureSearch() {
+  const page = ymById("SEARCH_PAGE");
+  if (page && ymVisible(page, 8)) return page;
+  const nav = ymById("NAVBAR_NAVIGATION_ITEM_SEARCH");
+  if (nav) ymClick(nav);
+  for (let attempt = 0; attempt < 20; attempt++) {
+    await ymSleep(150);
+    const opened = ymById("SEARCH_PAGE");
+    if (opened) return opened;
+  }
+  return null;
+}
+const page = await ensureSearch();
+if (!page) return "fail";
+let card = null;
+for (let step = 0; step < 20 && !card; step++) {
+  card = lumenCard(page) || lumenCard(document.querySelector("main"));
+  if (!card) await ymSleep(200);
+}
+if (!card) return "fail";
+const opener = card.matches && card.matches("a,button") ? card : (card.querySelector("a,button") || card);
+ymClick(opener);
+let field = null;
+for (let step = 0; step < 8 && !field; step++) {
+  await ymSleep(200);
+  const scope = card || document;
+  field = scope.querySelector("textarea, input[type='text'], input:not([type='hidden'])");
+  if (!field) field = document.querySelector('[data-test-id*="LUMEN"] textarea, [data-test-id*="LUMEN"] input');
+  if (field && document.activeElement && document.activeElement !== field && step < 3) field = null;
+}
+if (!field) return "started";
+if (!ymSetNativeValue(field, prompt)) return "started";
+const host = field.closest("form, [data-test-id*='LUMEN'], article, section") || document;
+let listen = null;
+for (const button of host.querySelectorAll("button")) {
+  const label = ((button.getAttribute("aria-label") || "") + " " + ymText(button)).toLowerCase();
+  if (label.includes("слушать") || label.includes("включить") || label.includes("запустить")) { listen = button; break; }
+}
+if (!listen) return "fail";
+ymClick(listen);
+return "started";
+""",
+        PROMPT=prompt,
     )
