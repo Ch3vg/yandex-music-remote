@@ -92,7 +92,8 @@ export type PlaybackFields = {
 
 const listeners = new Set<() => void>();
 
-let volumeEcho = false;
+let volumeLocked = false;
+let volumeSample: ((value: number) => void) | null = null;
 let coverToken = 0;
 let toastSeq = 0;
 let lastBackdropUrl = '';
@@ -232,8 +233,12 @@ export function playbackPositionSec(): number {
   return pos;
 }
 
-export function isVolumeEcho(): boolean {
-  return volumeEcho;
+export function setVolumeLocked(locked: boolean): void {
+  volumeLocked = locked;
+}
+
+export function bindVolumeSample(listener: ((value: number) => void) | null): void {
+  volumeSample = listener;
 }
 
 export function hasQueueNeighbor(side: 'prev' | 'next'): boolean {
@@ -352,11 +357,10 @@ export function applyPlayback(msg: PlaybackFields, full: boolean): boolean {
   if (msg.queue_name) rememberQueueName(msg.queue_name);
   state.contextLabel = (msg.context_label || '').trim();
 
-  let echoedVolume = false;
   if (msg.volume != null) {
-    volumeEcho = true;
-    state.volume = clampVolume(msg.volume);
-    echoedVolume = true;
+    const next = clampVolume(msg.volume);
+    if (!volumeLocked) state.volume = next;
+    volumeSample?.(next);
   }
 
   if (!state.dragging) {
@@ -377,11 +381,6 @@ export function applyPlayback(msg: PlaybackFields, full: boolean): boolean {
   }
 
   emit();
-  if (echoedVolume) {
-    window.requestAnimationFrame(() => {
-      volumeEcho = false;
-    });
-  }
   return trackChanged;
 }
 

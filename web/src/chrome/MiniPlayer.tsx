@@ -35,16 +35,24 @@ export function MiniPlayer({ onOpen }: { onOpen: () => void }) {
       hasPrev: () => hasQueueNeighbor('prev'),
       hasNext: () => hasQueueNeighbor('next'),
       onCommit: (dir) => send({ command: dir === 'next' ? 'next' : 'prev' }),
+      thirds: true,
     });
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     swipeRef.current?.reset();
   }, [view.swipeGen]);
 
-  useEffect(() => {
+  const prevKey = view.neighbors.prev
+    ? `${view.neighbors.prev.track_id ?? ''}:${view.neighbors.prev.title}`
+    : '';
+  const nextKey = view.neighbors.next
+    ? `${view.neighbors.next.track_id ?? ''}:${view.neighbors.next.title}`
+    : '';
+
+  useLayoutEffect(() => {
     swipeRef.current?.measure();
-  }, [view.hasTrack]);
+  }, [view.hasTrack, prevKey, nextKey]);
 
   useLayoutEffect(() => {
     const inner = innerRef.current;

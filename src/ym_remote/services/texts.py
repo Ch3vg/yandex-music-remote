@@ -54,8 +54,8 @@ SEARCH_CODES = {
 }
 
 
-def queue_track_failed(track_id: int) -> str:
-    return f"Не удалось включить трек из очереди ({track_id})"
+SKIP_TOO_FAR = "Слишком далеко по очереди"
+SKIP_FAILED = "Не удалось перейти к треку в очереди"
 
 
 def queue_notice(artist: str, title: str, *, end: bool) -> str:

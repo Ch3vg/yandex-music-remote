@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from ym_remote.cdp.adapter import CdpAdapter
-from ym_remote.cdp.scripts import queue_script
+from ym_remote.cdp.scripts import queue_script, skip_queue_script
+from ym_remote.cdp.session import CdpError
 from ym_remote.models.music import Album, Artist, Cover, Track
 from ym_remote.models.playback import NowMeta, QueueItem, QueueView
 
@@ -14,12 +15,17 @@ class QueueCdpAdapter(CdpAdapter):
 
         return await self.session.run(work)
 
-    async def play_track(self, track_id: int) -> tuple[bool, QueueView]:
+    async def skip(self, steps: int) -> tuple[bool, QueueView]:
         async def work() -> tuple[bool, QueueView]:
-            raw = await self.evaluate(queue_script("play", track_id), timeout=15)
+            timeout = min(180.0, 8.0 + abs(steps) * 6.0)
+            raw = await self.evaluate(skip_queue_script(steps), timeout=timeout)
             if not isinstance(raw, dict) or not raw.get("ok"):
                 return False, QueueView.empty()
-            return True, queue_from_raw(raw)
+            try:
+                viewed = await self.evaluate(queue_script("read"), timeout=8)
+            except (CdpError, OSError, ConnectionError):
+                return True, QueueView.empty()
+            return True, queue_from_raw(viewed)
 
         return await self.session.run(work)
 

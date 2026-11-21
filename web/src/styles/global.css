@@ -45,7 +45,6 @@
   --player-c2: #2a4d7a;
   --divider: rgba(255, 255, 255, 0.08);
   --mini-h: 64px;
-  --tab-h: 52px;
   --safe-b: env(safe-area-inset-bottom, 0px);
 }
 
@@ -80,76 +79,39 @@ button:active { opacity: 0.7; }
   margin: 0 auto;
   min-height: 100vh;
   min-height: 100dvh;
-  padding-bottom: calc(var(--mini-h) + var(--tab-h) + var(--safe-b) + 8px);
+  padding-bottom: calc(var(--mini-h) + var(--safe-b) + 12px);
 }
 
 body.player-open .app {
-  padding-bottom: calc(var(--tab-h) + var(--safe-b) + 8px);
+  padding-bottom: calc(var(--safe-b) + 8px);
 }
 body.player-open .mini-player {
   display: none !important;
 }
-/* TO REMOVE in future releases: скрытие мёртвой нижней панели */
-body.chrome-hidden .tab-bar {
-  display: none !important;
-}
-body.chrome-hidden .mini-player {
+body .mini-player {
   bottom: calc(var(--safe-b) + 4px);
 }
-body.chrome-hidden .app {
-  padding-bottom: calc(var(--mini-h) + var(--safe-b) + 12px);
-}
-body.chrome-hidden.player-open .app {
-  padding-bottom: calc(var(--safe-b) + 8px);
-}
 body.mini-absent .app {
-  padding-bottom: calc(var(--tab-h) + var(--safe-b) + 8px);
-}
-body.chrome-hidden.mini-absent .app {
   padding-bottom: calc(var(--safe-b) + 12px);
 }
 body.mini-absent.player-open .app {
   padding-bottom: calc(var(--safe-b) + 8px);
 }
 
-body.chrome-hidden .home-scroll {
+body .home-scroll {
   max-height: calc(100dvh - var(--mini-h) - var(--safe-b) - 56px);
 }
 body.mini-absent .home-scroll {
-  max-height: calc(100dvh - 56px);
-}
-body.chrome-hidden.mini-absent .home-scroll {
   max-height: calc(100dvh - var(--safe-b) - 56px);
 }
 
-body.chrome-hidden #screenPlaylist.active,
-body.chrome-hidden #screenArtistTracks.active,
-body.chrome-hidden #screenAlbum.active {
-  max-height: calc(100dvh - var(--mini-h) - var(--safe-b) - 8px);
-}
 body.mini-absent #screenPlaylist,
 body.mini-absent #screenArtistTracks,
 body.mini-absent #screenAlbum {
   max-height: calc(100dvh - var(--safe-b) - 8px);
 }
-body.chrome-hidden.mini-absent #screenPlaylist.active,
-body.chrome-hidden.mini-absent #screenArtistTracks.active,
-body.chrome-hidden.mini-absent #screenAlbum.active {
-  max-height: calc(100dvh - var(--safe-b) - 8px);
-}
-body.chrome-hidden .artist-scroll {
-  height: calc(100dvh - var(--mini-h) - var(--safe-b) - 8px);
-}
-body.mini-absent .artist-scroll,
-body.chrome-hidden.mini-absent .artist-scroll {
+body.mini-absent .artist-scroll {
   height: calc(100dvh - var(--safe-b) - 8px);
-}
-
-body.mini-absent .volume-screen {
-  min-height: calc(100dvh - var(--tab-h) - 120px);
-}
-body.chrome-hidden.mini-absent .volume-screen {
-  min-height: calc(100dvh - 120px);
 }
 
 .screen { display: none; padding: 0 16px 16px; }

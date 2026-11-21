@@ -30,6 +30,8 @@ export function bindTrackSwipe(
     hasPrev: () => boolean;
     hasNext: () => boolean;
     onCommit: (dir: 'prev' | 'next') => void;
+    /** Mini-player: CSS owns 300% / 33.333% panes. Drag is an offset from that rest. */
+    thirds?: boolean;
   },
 ): () => void {
   let width = 0;
@@ -39,16 +41,32 @@ export function bindTrackSwipe(
   let axis: 'x' | 'y' | null = null;
   let pointerId: number | null = null;
 
+  const place = (dx: number, animate: boolean) => {
+    strip.style.transition = animate ? 'transform 0.32s cubic-bezier(0.32, 0.72, 0, 1)' : 'none';
+    if (opts.thirds) {
+      strip.style.transform = `translate3d(calc(-33.333% + ${dx}px), 0, 0)`;
+    } else {
+      strip.style.transform = `translate3d(${-width + dx}px, 0, 0)`;
+    }
+    strip.dataset.offset = String(dx);
+  };
+
   const measure = () => {
-    width = viewport.clientWidth || 1;
-    const panes = strip.children;
-    strip.style.width = `${width * panes.length}px`;
-    for (const pane of panes) {
-      (pane as HTMLElement).style.width = `${width}px`;
+    width = viewport.clientWidth || (opts.thirds ? 0 : 1);
+    if (!opts.thirds) {
+      const panes = strip.children;
+      strip.style.width = `${width * panes.length}px`;
+      for (const pane of panes) {
+        (pane as HTMLElement).style.width = `${width}px`;
+      }
     }
     const off = Number(strip.dataset.offset || 0);
-    strip.style.transition = 'none';
-    strip.style.transform = `translate3d(${-width + off}px, 0, 0)`;
+    if (opts.thirds && width <= 0) {
+      strip.style.transition = 'none';
+      strip.style.transform = '';
+      return;
+    }
+    place(off, false);
   };
 
   const reset = () => {
@@ -63,10 +81,7 @@ export function bindTrackSwipe(
   };
 
   const applyDrag = (dx: number, animate: boolean) => {
-    const rx = rubber(dx);
-    strip.style.transition = animate ? 'transform 0.32s cubic-bezier(0.32, 0.72, 0, 1)' : 'none';
-    strip.style.transform = `translate3d(${-width + rx}px, 0, 0)`;
-    strip.dataset.offset = String(rx);
+    place(rubber(dx), animate);
   };
 
   const onDown = (e: PointerEvent) => {
@@ -122,6 +137,11 @@ export function bindTrackSwipe(
     dragDx = 0;
     axis = null;
     setHorizontalSwipe(false);
+    if (width <= 0) {
+      applyDrag(0, true);
+      strip.dataset.offset = '0';
+      return;
+    }
     const threshold = Math.min(88, width * 0.28);
     if (dx <= -threshold && opts.hasNext()) {
       applyDrag(-width, true);

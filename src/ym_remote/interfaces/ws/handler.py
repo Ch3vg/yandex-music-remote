@@ -13,7 +13,13 @@ from ym_remote.schemas.wave import EmptyLumenPrompt, parse_start_wave
 from ym_remote.schemas.queue import queue_message
 from ym_remote.services.monitor import MonitorService
 from ym_remote.services.queue import QueueService
-from ym_remote.services.texts import ALBUM_PLAY_FAILED, ARTIST_PLAY_FAILED, LUMEN_PROMPT_EMPTY, PLAY_FAILED
+from ym_remote.services.texts import (
+    ALBUM_PLAY_FAILED,
+    ARTIST_PLAY_FAILED,
+    LUMEN_PROMPT_EMPTY,
+    PLAY_FAILED,
+    SKIP_FAILED,
+)
 from ym_remote.services.transport import TransportService
 
 
@@ -31,7 +37,6 @@ GUEST_FORBIDDEN = frozenset({
     "play_now",
     "play",
     "queue",
-    "play_queue_track",
     "play_album",
     "play_artist",
     "start_wave",
@@ -292,19 +297,20 @@ class CommandHandler:
     async def _cmd_refresh_queue(self, websocket, message: dict) -> None:
         await self._cmd_show_queue(websocket, message)
 
-    async def _cmd_play_queue_track(self, websocket, message: dict) -> None:
-        try:
-            track_id = int(message.get("track_id"))
-        except (TypeError, ValueError):
-            await self._error(websocket, "Не удалось включить трек из очереди")
+    async def _cmd_skip_queue(self, websocket, message: dict) -> None:
+        raw = message.get("steps")
+        if isinstance(raw, bool):
+            await self._error(websocket, SKIP_FAILED)
             return
-        album = message.get("album_id")
         try:
-            album_id = int(album) if album is not None else None
-        except (TypeError, ValueError):
-            album_id = None
+            steps = int(raw)
+        except (TypeError, ValueError, OverflowError):
+            await self._error(websocket, SKIP_FAILED)
+            return
+        if steps == 0:
+            return
         try:
-            view = await self.queue.play(track_id, album_id)
+            view = await self.queue.skip(steps)
         except RemoteError as exc:
             await self._error(websocket, exc.message)
             return

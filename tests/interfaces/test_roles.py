@@ -63,7 +63,6 @@ async def test_guest_is_rejected_on_forbidden_commands_and_allowed_on_queue_edit
         {"command": "play_now", **TRACK},
         {"command": "play", **TRACK},
         {"command": "queue", **TRACK},
-        {"command": "play_queue_track", "track_id": 1},
         {"command": "play_album", "album_id": 2},
         {"command": "play_artist", "artist_id": 3},
         {"command": "start_wave", "source": "personal"},

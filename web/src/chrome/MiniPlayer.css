@@ -2,7 +2,7 @@
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(var(--tab-h) + var(--safe-b));
+  bottom: calc(var(--safe-b) + 4px);
   z-index: 50;
   max-width: 480px;
   margin: 0 auto;
@@ -142,13 +142,17 @@
 .mini-swipe-strip {
   display: flex;
   align-items: center;
+  width: 300%;
+  transform: translate3d(-33.333%, 0, 0);
   will-change: transform;
 }
 .mini-swipe-pane {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-shrink: 0;
+  flex: 0 0 33.333%;
+  min-width: 0;
+  overflow: hidden;
   box-sizing: border-box;
   padding-right: 4px;
 }

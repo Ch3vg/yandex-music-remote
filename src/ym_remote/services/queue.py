@@ -5,7 +5,9 @@ from ym_remote.cdp.session import CdpError, CdpUnavailable
 from ym_remote.models.errors import RemoteError
 from ym_remote.models.playback import QueueView
 from ym_remote.services.gate import HeavyGate
-from ym_remote.services.texts import queue_track_failed
+from ym_remote.services.texts import SKIP_FAILED, SKIP_TOO_FAR
+
+MAX_SKIP_STEPS = 40
 
 
 class QueueService:
@@ -20,13 +22,16 @@ class QueueService:
             except (CdpUnavailable, CdpError, OSError, ConnectionError):
                 return QueueView.empty()
 
-    async def play(self, track_id: int, album_id: int | None = None) -> QueueView:
-        del album_id
+    async def skip(self, steps: int) -> QueueView:
+        if steps == 0:
+            return await self.show()
+        if abs(steps) > MAX_SKIP_STEPS:
+            raise RemoteError(SKIP_TOO_FAR)
         async with self.gate.hold():
             try:
-                ok, view = await self.adapter.play_track(track_id)
+                ok, view = await self.adapter.skip(steps)
             except (CdpUnavailable, CdpError, OSError, ConnectionError) as exc:
-                raise RemoteError(queue_track_failed(track_id)) from exc
+                raise RemoteError(SKIP_FAILED) from exc
         if not ok:
-            raise RemoteError(queue_track_failed(track_id))
+            raise RemoteError(SKIP_FAILED)
         return view
