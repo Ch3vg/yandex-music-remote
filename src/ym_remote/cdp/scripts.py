@@ -49,7 +49,23 @@ function ymRoots() {
   return roots;
 }
 function ymText(el) {
-  return el && el.textContent ? el.textContent.trim() : "";
+  if (!el) return "";
+  const chunks = [];
+  const walk = (node) => {
+    if (!node) return;
+    if (node.nodeType === 3) {
+      chunks.push(node.nodeValue || "");
+      return;
+    }
+    if (node.nodeType !== 1 || node.getAttribute("aria-hidden") === "true") return;
+    if (node.classList && node.classList.contains("rfm-marquee-container")) {
+      const once = node.querySelector(".rfm-child");
+      if (once) { walk(once); return; }
+    }
+    for (const child of node.childNodes) walk(child);
+  };
+  walk(el);
+  return chunks.join("").trim();
 }
 function ymFindRepeat() {
   const full = ymById("FULLSCREEN_PLAYER_MODAL");
@@ -224,21 +240,28 @@ def read_bar_script() -> str:
         r"""
 const bar = ymById("PLAYERBAR_DESKTOP") || ymById("FULLSCREEN_PLAYER_MODAL") || ymById("VIBE_PLAYERBAR") || document.body;
 let title = ymText(ymById("TRACK_TITLE", bar)) || ymText(ymById("VIBE_PLAYERBAR_TRACK_NAME"));
-const artistRoot = ymById("PLAYERBAR_DESKTOP") || bar;
+const artistRoot = ymById("VIBE_DYNAMIC_ARTISTS") || ymById("PLAYERBAR_DESKTOP") || bar;
 let artists = Array.from(artistRoot.querySelectorAll('[data-test-id="SEPARATED_ARTIST_TITLE"]')).map((el) => ymText(el)).filter(Boolean);
 let cover = "";
-const coverRoot = ymById("ENTITY_COVER_IMAGE", bar) || ymById("ENTITY_COVER_IMAGE");
+const vibeCover = ymById("VIBE_ALBUM_COVER");
+const coverRoot = (vibeCover && vibeCover.querySelector("img")) || ymById("ENTITY_COVER_IMAGE", bar);
 if (coverRoot) {
   const img = coverRoot.matches && coverRoot.matches("img") ? coverRoot : coverRoot.querySelector("img");
-  cover = (img || coverRoot).getAttribute("src") || "";
+  const node = img || coverRoot;
+  cover = node.currentSrc || node.getAttribute("src") || "";
 }
 let isPlaying = ymTransportPlaying();
-if (!title && navigator.mediaSession && navigator.mediaSession.metadata) {
+if (navigator.mediaSession && navigator.mediaSession.metadata) {
   const meta = navigator.mediaSession.metadata;
-  title = meta.title || "";
-  if (!artists.length && meta.artist) artists = [meta.artist];
-  if (!cover && meta.artwork && meta.artwork.length) cover = meta.artwork[0].src || "";
-  isPlaying = navigator.mediaSession.playbackState === "playing";
+  if (!title) {
+    title = meta.title || "";
+    isPlaying = navigator.mediaSession.playbackState === "playing";
+  }
+  if (!artists.length && meta.artist) artists = meta.artist.split(",").map((name) => name.trim()).filter(Boolean);
+  if (!cover && meta.artwork && meta.artwork.length) {
+    const art = meta.artwork[meta.artwork.length - 1];
+    cover = (art && art.src) || "";
+  }
 }
 if (!title) return null;
 let volume = null;
@@ -254,6 +277,19 @@ const timeSlider = ymById("TIMECODE_SLIDER");
 if (timeSlider && timeSlider.value !== "") {
   position = Number(timeSlider.value);
   duration = timeSlider.max === "" ? null : Number(timeSlider.max);
+}
+if (!Number.isFinite(position) || !Number.isFinite(duration)) {
+  const toSec = (text) => {
+    const match = String(text || "").trim().match(/^(?:(\d+):)?(\d+):(\d+)$/);
+    if (!match) return null;
+    return (match[1] ? Number(match[1]) : 0) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+  };
+  const startSec = toSec(ymText(ymById("TIMECODE_TIME_START")));
+  const endSec = toSec(ymText(ymById("TIMECODE_TIME_END")));
+  if (startSec != null && endSec != null) {
+    position = startSec;
+    duration = endSec;
+  }
 }
 let repeatMode = "off";
 const repeat = ymFindRepeat();
@@ -271,14 +307,14 @@ if (shuffleButton) {
 const likeButton = ymFindControl("LIKE_BUTTON");
 const liked = likeButton ? ymLikeActive(likeButton.getAttribute("data-test-id") || "", likeButton.getAttribute("aria-pressed"), likeButton.getAttribute("aria-checked")) : false;
 let artistHref = null;
-const artistLink = (ymById("PLAYERBAR_DESKTOP") || document).querySelector('[data-test-id="SEPARATED_ARTIST_TITLE"] a');
+const artistLink = artistRoot.querySelector('[data-test-id="SEPARATED_ARTIST_TITLE"] a, a[href*="artist"]');
 if (artistLink) artistHref = artistLink.href || null;
 let artistRefs = ymReadArtistRefs(artistRoot);
 if (!artistRefs.length && artists.length) {
   artistRefs = artists.map((name) => ({ id: null, name }));
 }
 let albumHref = null;
-const coverBox = ymById("PLAYERBAR_DESKTOP_COVER_CONTAINER");
+const coverBox = ymById("VIBE_ALBUM_COVER") || ymById("PLAYERBAR_DESKTOP_COVER_CONTAINER");
 const albumLink = coverBox && coverBox.querySelector("a");
 if (albumLink) albumHref = albumLink.href || null;
 if (!albumHref) {
@@ -293,8 +329,14 @@ for (const id of nameIds) {
   if (el && ymText(el)) { queueName = ymText(el); break; }
 }
 if (!queueName) {
-  const scope = ymById("PLAYERBAR_DESKTOP") || document;
-  const links = scope.querySelectorAll('a[href*="playlist"], a[href*="album"], a[href*="artist"]');
+  const reset = ymById("RESET_VIBE_CONTEXT_BUTTON");
+  const named = reset && reset.querySelector("[title]");
+  const titled = named && named.getAttribute("title");
+  if (titled && titled.trim()) queueName = titled.trim();
+}
+if (!queueName) {
+  const scope = ymById("VIBE_PLAYERBAR") || ymById("PLAYERBAR_DESKTOP") || ymById("FULLSCREEN_PLAYER_MODAL");
+  const links = scope ? scope.querySelectorAll('a[href*="playlist"], a[href*="album"], a[href*="artist"]') : [];
   for (const link of links) {
     const value = ymText(link);
     if (value && value.length < 100) { queueName = value; break; }
@@ -463,14 +505,14 @@ def navigate_script(target: str) -> str:
     return fill(
         r"""
 const target = __TARGET__;
-const bar = ymById("PLAYERBAR_DESKTOP");
+const bar = ymById("VIBE_DYNAMIC_ARTISTS") || ymById("PLAYERBAR_DESKTOP");
 if (target === "artist") {
-  const link = bar && bar.querySelector('[data-test-id="SEPARATED_ARTIST_TITLE"] a');
+  const link = bar && bar.querySelector('[data-test-id="SEPARATED_ARTIST_TITLE"] a, a[href*="artist"]');
   if (!link) return false;
   ymClick(link);
   return true;
 }
-const box = ymById("PLAYERBAR_DESKTOP_COVER_CONTAINER");
+const box = ymById("VIBE_ALBUM_COVER") || ymById("PLAYERBAR_DESKTOP_COVER_CONTAINER");
 const link = box && box.querySelector("a");
 if (link) { ymClick(link); return true; }
 const button = ymById("ENTITY_COVER_BUTTON");
