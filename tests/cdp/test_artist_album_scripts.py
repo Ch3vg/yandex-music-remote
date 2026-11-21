@@ -38,6 +38,10 @@ def test_helpers_and_read_bar_extract_artist_refs_after_ym_in_app_go():
 
     bar = read_bar_script()
     assert "ymReadArtistRefs(artistRoot)" in bar
+    assert "VIBE_DYNAMIC_ARTISTS" in bar
+    assert "VIBE_ALBUM_COVER" in bar
+    assert "TIMECODE_TIME_START" in bar
+    assert "ENTITY_COVER_IMAGE\", bar" in bar
     assert "artist_refs: artistRefs" in bar
     assert "music-application://" not in bar
 
