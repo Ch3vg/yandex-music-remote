@@ -212,10 +212,4 @@ export type ClientCommand =
       artist_mode?: ArtistPlayMode;
       context_album_id?: number;
     }
-  | {
-      command: 'play_queue_track';
-      track_id: number;
-      album_id: number | null;
-      title: string;
-      artist: string;
-    };
+  | { command: 'skip_queue'; steps: number };

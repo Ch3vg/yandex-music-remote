@@ -4,9 +4,7 @@ export type ScreenName =
   | 'search'
   | 'artist'
   | 'artistTracks'
-  | 'album'
-  | 'volume'
-  | 'more';
+  | 'album';
 
 export type ArtistTracksMode = 'all' | 'familiar';
 
@@ -16,8 +14,6 @@ export type RouteEntry =
   | { screen: 'search'; fromHome: boolean }
   | { screen: 'artist'; artistId: number; initialName?: string; nonce: number }
   | { screen: 'artistTracks'; artistId: number; artistName: string; mode: ArtistTracksMode; nonce: number }
-  | { screen: 'album'; albumId: number; initialTitle?: string; nonce: number }
-  | { screen: 'volume' }
-  | { screen: 'more' };
+  | { screen: 'album'; albumId: number; initialTitle?: string; nonce: number };
 
 export type PlayerPhase = 'closed' | 'open' | 'closing';

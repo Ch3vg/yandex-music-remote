@@ -444,6 +444,83 @@ return true;
     )
 
 
+def skip_queue_script(steps: int) -> str:
+    """Кликает next/prev без сброса позиции и ждёт смены trackId между кликами."""
+    return fill(
+        r"""
+const steps = __STEPS__;
+const direction = steps < 0 ? -1 : 1;
+const count = Math.abs(steps);
+if (!Number.isFinite(count) || count < 1 || count > 40) return { ok: false, code: "too_far" };
+function playerTrackId() {
+  const scope = ymById("PLAYERBAR_DESKTOP") || ymById("FULLSCREEN_PLAYER_MODAL") || ymById("VIBE_PLAYERBAR");
+  if (!scope || !scope.querySelectorAll) return "";
+  const anchors = scope.querySelectorAll('a[href*="trackId="], a[href*="/track/"]');
+  for (const anchor of anchors) {
+    try {
+      const url = new URL(anchor.href, location.href);
+      const raw = url.searchParams.get("trackId");
+      if (raw && /^\d+$/.test(raw)) return raw;
+      const parts = url.pathname.split("/").filter(Boolean);
+      const at = parts.lastIndexOf("track");
+      if (at >= 0 && /^\d+$/.test(parts[at + 1] || "")) return parts[at + 1];
+    } catch (error) {}
+  }
+  return "";
+}
+function positionSec() {
+  const slider = ymById("TIMECODE_SLIDER");
+  const value = slider ? Number(slider.value) : NaN;
+  return Number.isFinite(value) ? value : null;
+}
+function stepButton() {
+  const id = direction > 0 ? "NEXT_TRACK_BUTTON" : "PREVIOUS_TRACK_BUTTON";
+  const label = direction > 0 ? "Следующая песня" : "Предыдущая песня";
+  const scope = ymById("PLAYERBAR_DESKTOP") || ymById("FULLSCREEN_PLAYER_MODAL") || ymById("VIBE_PLAYERBAR") || document;
+  let button = ymById(id, scope) || scope.querySelector('[aria-label="' + label + '"]');
+  if (!button) button = ymById(id) || document.querySelector('[aria-label="' + label + '"]');
+  return button;
+}
+let seen = playerTrackId();
+for (let index = 0; index < count; index++) {
+  const button = stepButton();
+  if (!button) return { ok: false, code: "fail" };
+  const before = positionSec();
+  ymClick(button);
+  let changed = false;
+  for (let tick = 0; tick < 40; tick++) {
+    await ymSleep(100);
+    const now = playerTrackId();
+    if (now && now !== seen) {
+      seen = now;
+      changed = true;
+      break;
+    }
+  }
+  if (!changed) return { ok: false, code: "fail" };
+  let stable = 0;
+  let heard = false;
+  for (let tick = 0; tick < 18; tick++) {
+    await ymSleep(120);
+    const now = playerTrackId();
+    if (!now || now !== seen) {
+      if (now) seen = now;
+      stable = 0;
+      heard = false;
+      continue;
+    }
+    stable += 1;
+    const pos = positionSec();
+    if (pos != null && (pos < 1.5 || (before != null && Math.abs(pos - before) > 0.8))) heard = true;
+    if (stable >= 5 && heard) break;
+  }
+}
+return { ok: true, track_id: seen };
+""",
+        STEPS=steps,
+    )
+
+
 def previous_script() -> str:
     return script(
         r"""
@@ -1239,11 +1316,10 @@ return { ok: true, tracks, artist_cards: artistCards, waves, lumen };
     )
 
 
-def queue_script(mode: str, track_id: int | None = None) -> str:
+def queue_script(mode: str = "read") -> str:
     return fill(
         r"""
 const mode = __MODE__;
-const trackId = __TRACK_ID__ == null ? "" : String(__TRACK_ID__);
 async function ensureQueue(waitMs) {
   const panel = ymById("PLAY_QUEUE");
   const rect = panel ? panel.getBoundingClientRect() : null;
@@ -1305,39 +1381,10 @@ function readQueue() {
   };
 }
 const empty = { ok: true, before: [], current: null, after: [], after_title: "Далее в очереди", now_meta: { subtitle: "", source: "" } };
-if (mode === "read") {
-  if (!(await ensureQueue(350))) return empty;
-  return readQueue();
-}
-if (!(await ensureQueue(500))) return { ok: false, code: "fail" };
-const panel = ymById("PLAY_QUEUE");
-let row = null;
-for (const candidate of panel.querySelectorAll('[data-test-id="TRACK_PLAYLIST"], [data-test-id="TRACK_ALBUM"]')) {
-  const anchor = candidate.querySelector('a[href*="trackId="]');
-  if (!anchor) continue;
-  try {
-    const url = new URL(anchor.href, location.href);
-    if (url.searchParams.get("trackId") === trackId) { row = candidate; break; }
-  } catch (error) {}
-}
-if (!row) return { ok: false, code: "fail" };
-if (row.querySelector('[data-test-id="PAUSE_BUTTON"]')) {
-  const view = readQueue();
-  view.code = "already";
-  return view;
-}
-if (row.scrollIntoView) row.scrollIntoView({ block: "center" });
-await ymSleep(80);
-const button = row.querySelector('[data-test-id="PLAY_BUTTON"]');
-if (!button) return { ok: false, code: "fail" };
-ymClick(button);
-await ymSleep(180);
-const view = readQueue();
-view.code = "playing";
-return view;
+if (mode !== "read" || !(await ensureQueue(350))) return empty;
+return readQueue();
 """,
         MODE=mode,
-        TRACK_ID=track_id,
     )
 
 

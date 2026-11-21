@@ -2,7 +2,7 @@ import asyncio
 
 from ym_remote.cdp.monitor import MonitorCdpAdapter
 from ym_remote.cdp.queue import QueueCdpAdapter
-from ym_remote.cdp.scripts import playlist_script, queue_script, search_script, track_page_script
+from ym_remote.cdp.scripts import playlist_script, previous_script, queue_script, search_script, skip_queue_script, track_page_script
 from ym_remote.cdp.search import SearchCdpAdapter
 from ym_remote.cdp.session import CdpSession, score_page
 from ym_remote.cdp.transport import TransportCdpAdapter
@@ -192,10 +192,18 @@ def test_playlist_and_queue_scripts_reopen_by_id():
     assert "TRACK_CONTEXT_MENU_PLAY_NEXT_BUTTON" in menu
     assert "history.back()" in menu
     assert "music-application://" not in menu
-    queue = queue_script("play", 77)
+    queue = queue_script("read")
     assert "PLAY_QUEUE" in queue
     assert "PLAYERBAR_DESKTOP_PLAY_QUEUE_BUTTON" in queue
-    assert "String(77)" in queue
+    assert "PLAY_BUTTON" not in queue
+    skip = skip_queue_script(3)
+    assert "NEXT_TRACK_BUTTON" in skip
+    assert "PREVIOUS_TRACK_BUTTON" in skip
+    assert 'ymSetNativeValue(slider, "0")' not in skip
+    back = skip_queue_script(-2)
+    assert "PREVIOUS_TRACK_BUTTON" in back
+    assert 'ymSetNativeValue(slider, "0")' not in back
+    assert 'ymSetNativeValue(slider, "0")' in previous_script()
 
 
 async def test_play_next_adapter_stays_inside_the_open_page():

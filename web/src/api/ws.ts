@@ -89,7 +89,7 @@ function armWaiter(command: ClientCommand): void {
   } else if (command.command === 'play_artist' || command.command === 'play_album' || command.command === 'start_wave') {
     kind = 'play';
     anyPlay = true;
-  } else if (command.command === 'play_queue_track') {
+  } else if (command.command === 'skip_queue') {
     kind = 'queue';
   } else if (command.command === 'play_next' || command.command === 'add_to_queue') {
     kind = 'menu';
@@ -107,7 +107,7 @@ function shouldWait(command: ClientCommand, forced: boolean): boolean {
     || command.command === 'start_wave'
     || command.command === 'play_next'
     || command.command === 'add_to_queue'
-    || command.command === 'play_queue_track';
+    || command.command === 'skip_queue';
 }
 
 export function send(command: ClientCommand, options?: { wait?: boolean }): boolean {

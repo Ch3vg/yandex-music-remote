@@ -9,10 +9,11 @@ import {
   beginTimelineDrag,
   cycleRepeat,
   endTimelineDrag,
+  bindVolumeSample,
   hasQueueNeighbor,
-  isVolumeEcho,
   playbackPositionSec,
   setVolumeLocal,
+  setVolumeLocked,
   toggleLike,
   togglePlaying,
   toggleShuffle,
@@ -62,6 +63,59 @@ export function Player({ phase, onClose, onQueue, onTrackMenu }: Props) {
   const swipeRef = useRef<SwipeHandle | null>(null);
   const [localPos, setLocalPos] = useState(0);
   const seeking = useRef(false);
+  const volumeDrag = useRef(false);
+  const volumeInFlight = useRef(false);
+  const volumePending = useRef<number | null>(null);
+  const volumeSent = useRef<number | null>(null);
+  const volumeTimer = useRef(0);
+  const flushVolume = useRef<() => void>(() => {});
+  const releaseVolume = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    const release = () => {
+      if (!volumeDrag.current && !volumeInFlight.current && volumePending.current == null) {
+        setVolumeLocked(false);
+      }
+    };
+    const finishFlight = () => {
+      window.clearTimeout(volumeTimer.current);
+      volumeInFlight.current = false;
+      flushVolume.current();
+      release();
+    };
+    releaseVolume.current = release;
+    flushVolume.current = () => {
+      if (volumeInFlight.current || volumePending.current == null) return;
+      const value = volumePending.current;
+      if (value === volumeSent.current) {
+        volumePending.current = null;
+        release();
+        return;
+      }
+      volumePending.current = null;
+      volumeSent.current = value;
+      volumeInFlight.current = true;
+      setVolumeLocked(true);
+      if (!send({ command: 'set_volume', value })) {
+        volumeInFlight.current = false;
+        volumeSent.current = null;
+        release();
+        return;
+      }
+      window.clearTimeout(volumeTimer.current);
+      volumeTimer.current = window.setTimeout(finishFlight, 1200);
+    };
+    bindVolumeSample((reported) => {
+      if (!volumeInFlight.current) return;
+      if (Math.round(reported) !== volumeSent.current) return;
+      finishFlight();
+    });
+    return () => {
+      bindVolumeSample(null);
+      window.clearTimeout(volumeTimer.current);
+      setVolumeLocked(false);
+    };
+  }, []);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -315,12 +369,26 @@ export function Player({ phase, onClose, onQueue, onTrackMenu }: Props) {
             max={100}
             value={view.volume}
             aria-label="Громкость"
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId);
+              volumeDrag.current = true;
+              setVolumeLocked(true);
+            }}
+            onPointerUp={() => {
+              volumeDrag.current = false;
+              releaseVolume.current();
+            }}
+            onPointerCancel={() => {
+              volumeDrag.current = false;
+              releaseVolume.current();
+            }}
             onInput={(event) => {
-              if (isVolumeEcho()) return;
               const next = Math.round(Number(event.currentTarget.value));
               if (!Number.isFinite(next)) return;
+              setVolumeLocked(true);
               setVolumeLocal(next);
-              send({ command: 'set_volume', value: next });
+              volumePending.current = next;
+              flushVolume.current();
             }}
           />
         </div>

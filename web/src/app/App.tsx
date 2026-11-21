@@ -4,7 +4,6 @@ import type { ArtistRef, CatalogTrack, PlayContext, PlayMode } from '../api/type
 import { connectWs, disconnectWs, send } from '../api/ws';
 import { Busy } from '../chrome/Busy';
 import { MiniPlayer } from '../chrome/MiniPlayer';
-import { TabBar } from '../chrome/TabBar';
 import { Toasts } from '../chrome/Toasts';
 import {
   type ArtistChipItem,
@@ -17,11 +16,9 @@ import { Album, type AlbumRouteRequest } from '../screens/Album';
 import { Artist, type ArtistRouteRequest } from '../screens/Artist';
 import { ArtistTracks, type ArtistTracksRouteRequest } from '../screens/ArtistTracks';
 import { Home } from '../screens/Home';
-import { More } from '../screens/More';
 import { Player } from '../screens/Player';
 import { Playlist, type PlaylistRequest } from '../screens/Playlist';
 import { Search } from '../screens/Search';
-import { Volume } from '../screens/Volume';
 import { ArtistPickerSheet, type ArtistPickerState } from '../sheets/ArtistPickerSheet';
 import { QrSheet } from '../sheets/QrSheet';
 import { QueueSheet } from '../sheets/QueueSheet';
@@ -172,22 +169,6 @@ export function App() {
       return prev.slice(0, -1);
     });
   }, []);
-
-  const selectTab = useCallback(
-    (entry: RouteEntry) => {
-      if (phaseRef.current === 'open') {
-        closePlayer();
-        return;
-      }
-      setQueueOpen(false);
-      setActionsState(null);
-      setPicker(null);
-      setQrOpen(false);
-      windowScrollMap.current.clear();
-      setNavStack([entry]);
-    },
-    [closePlayer],
-  );
 
   const navigateToArtist = useCallback(
     (artistId: number, initialName?: string) => {
@@ -351,7 +332,7 @@ export function App() {
   );
 
   useEffect(() => {
-    if (screen === 'search' || screen === 'more' || screen === 'volume') {
+    if (screen === 'search') {
       const saved = windowScrollMap.current.get(navStack.length - 1) ?? 0;
       window.scrollTo(0, saved);
     } else {
@@ -361,19 +342,10 @@ export function App() {
 
   useEffect(() => {
     const playerOpen = phase !== 'closed';
-    const hideChrome =
-      playerOpen
-      || screen === 'home'
-      || screen === 'playlist'
-      || screen === 'artist'
-      || screen === 'artistTracks'
-      || screen === 'album'
-      || (screen === 'search' && searchFromHome);
     document.body.classList.toggle('player-open', playerOpen);
     document.body.classList.toggle('player-slide-in', slideIn);
-    document.body.classList.toggle('chrome-hidden', hideChrome);
     document.body.classList.toggle('mini-absent', !hasTrack);
-  }, [phase, slideIn, screen, searchFromHome, hasTrack]);
+  }, [phase, slideIn, hasTrack]);
 
   useEffect(() => {
     connectWs();
@@ -451,18 +423,8 @@ export function App() {
           onQueue={() => setQueueOpen(true)}
           onTrackMenu={openPlayerTrackMenu}
         />
-        <Volume active={screen === 'volume'} />
-        <More active={screen === 'more'} />
       </div>
       <MiniPlayer onOpen={openPlayer} />
-      {/* TO REMOVE in future releases: нижняя панель и переходы на volume/more с неё. */}
-      <TabBar
-        screen={screen}
-        playerOpen={phase !== 'closed'}
-        onSearch={() => selectTab({ screen: 'search', fromHome: false })}
-        onVolume={() => selectTab({ screen: 'volume' })}
-        onMore={() => selectTab({ screen: 'more' })}
-      />
       <QrSheet open={qrOpen} onClose={() => setQrOpen(false)} />
       <QueueSheet
         open={queueOpen}

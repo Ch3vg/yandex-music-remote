@@ -29,8 +29,8 @@ body.player-open .player-bg {
   min-height: 100dvh;
 }
 .player-bg {
-  min-height: calc(100vh - var(--mini-h) - var(--tab-h) - 40px);
-  min-height: calc(100dvh - var(--mini-h) - var(--tab-h) - 40px);
+  min-height: calc(100vh - var(--mini-h) - 40px);
+  min-height: calc(100dvh - var(--mini-h) - 40px);
   touch-action: pan-y;
   background: linear-gradient(180deg, var(--player-c1) 0%, var(--player-c2) 100%);
   transition: background 0.65s ease;

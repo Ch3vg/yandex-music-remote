@@ -34,7 +34,7 @@
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 0 16px calc(var(--tab-h) + var(--safe-b) + 12px);
+  padding: 0 16px calc(var(--safe-b) + 12px);
 }
 .queue-panel ul { list-style: none; }
 .queue-section-title {
