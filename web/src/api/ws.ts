@@ -1,6 +1,26 @@
 import type { ArtistRef, ClientCommand, QueueItem, QueuePayload, RepeatMode } from './types';
 import { beginWork } from '../store/busy';
 import { applyPlayback, applyQueue, getSnapshot, markStopped, pushToast, setConnected, type PlaybackFields } from '../store/playback';
+import { applyRole, type Role } from '../store/role';
+
+const SESSION_KEY = 'ym-session';
+
+export function sessionToken(): string {
+  try {
+    return localStorage.getItem(SESSION_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function saveSession(token: string | null): void {
+  try {
+    if (token) localStorage.setItem(SESSION_KEY, token);
+    else localStorage.removeItem(SESSION_KEY);
+  } catch {
+    // ignore
+  }
+}
 
 let socket: WebSocket | null = null;
 let generation = 0;
@@ -217,6 +237,8 @@ function openSocket(): void {
     if (gen !== generation) return;
     lastRxAt = performance.now();
     setConnected(true);
+    const token = sessionToken();
+    send(token ? { command: 'hello', token } : { command: 'hello' });
     if (queuedShadeCommand) {
       const cmd = queuedShadeCommand;
       queuedShadeCommand = null;
@@ -242,7 +264,12 @@ function openSocket(): void {
     }
     if (!parsed || typeof parsed !== 'object') return;
     const raw = parsed as Record<string, unknown>;
-    if (raw.type === 'now_playing' || raw.type === 'player_tick') {
+    if (raw.type === 'role') {
+      const next: Role = raw.role === 'admin' ? 'admin' : 'guest';
+      if (typeof raw.token === 'string' && raw.token) saveSession(raw.token);
+      else if (next === 'guest') saveSession(null);
+      applyRole(next);
+    } else if (raw.type === 'now_playing' || raw.type === 'player_tick') {
       const playback = parsePlayback(raw);
       const changed = applyPlayback(playback, raw.type === 'now_playing');
       if (playback.track_id) dropPlay(playback);

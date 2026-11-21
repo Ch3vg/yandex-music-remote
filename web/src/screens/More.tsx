@@ -1,4 +1,6 @@
+// TO REMOVE in future releases: экран «Ещё» открывается только с мёртвой нижней панели. Живые QR, шторка и PIN — в QrSheet.
 import { useState } from 'react';
+import { RoleUnlock } from '../components/RoleUnlock';
 import { QrLink, useNetworkQr } from '../sheets/QrSheet';
 import { isShadeSupported, toggleShade, useShadeEnabled } from '../lib/shade';
 import './More.css';
@@ -41,6 +43,9 @@ export function More({ active }: { active: boolean }) {
           </span>
         </button>
       )}
+      <div className="more-card">
+        <RoleUnlock />
+      </div>
       <p className="more-hint">Пульт управляет Яндекс Музыкой на компьютере через CDP.</p>
     </section>
   );

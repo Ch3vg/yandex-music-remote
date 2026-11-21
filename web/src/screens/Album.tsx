@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { fetchJson } from '../api/http';
 import type { AlbumDetail, ArtistRef, CatalogTrack, PlayContext } from '../api/types';
 import { send } from '../api/ws';
+import { useRole } from '../store/role';
 import { TrackRow } from '../components/TrackRow';
 import { normalizeCoverUrl } from '../lib/coverUrl';
 import { formatTrackCount } from '../lib/trackCount';
@@ -63,6 +64,7 @@ export function Album({ active, request, onBack, onOpenArtist, onPlay, onMenu }:
   const [error, setError] = useState('');
   const [retrySeq, setRetrySeq] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const admin = useRole() === 'admin';
 
   const routeKey = request ? `${request.albumId}:${request.nonce}` : '';
 
@@ -186,7 +188,7 @@ export function Album({ active, request, onBack, onOpenArtist, onPlay, onMenu }:
               {metaParts.length > 0 ? (
                 <div className="album-meta">{metaParts.join(' · ')}</div>
               ) : null}
-              <div className="album-actions">
+              {admin ? <div className="album-actions">
               <button
                 type="button"
                 className="album-play-btn"
@@ -221,7 +223,7 @@ export function Album({ active, request, onBack, onOpenArtist, onPlay, onMenu }:
                 </span>
                 <span className="album-play-caption">Слушать</span>
               </button>
-              </div>
+              </div> : null}
             </div>
 
             <ul className="track-list" id="albumTracks">

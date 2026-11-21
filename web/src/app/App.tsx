@@ -27,6 +27,7 @@ import { QrSheet } from '../sheets/QrSheet';
 import { QueueSheet } from '../sheets/QueueSheet';
 import { TrackActions } from '../sheets/TrackActions';
 import { getSnapshot, pushToast, usePlaybackSelector } from '../store/playback';
+import { getRole } from '../store/role';
 import type { ArtistTracksMode, PlayerPhase, RouteEntry } from './screen';
 
 type ActionsState = {
@@ -307,7 +308,8 @@ export function App() {
   }, []);
 
   const playWithContext = useCallback((track: CatalogTrack, mode: PlayMode, context: PlayContext | null) => {
-    const command = buildPlayCommand(mode, track, context);
+    const effective = mode === 'now' && getRole() !== 'admin' ? 'next' : mode;
+    const command = buildPlayCommand(effective, track, context);
     if (!command) {
       pushToast('Не удалось выполнить действие с треком', 'error');
       setActionsState(null);
@@ -453,6 +455,7 @@ export function App() {
         <More active={screen === 'more'} />
       </div>
       <MiniPlayer onOpen={openPlayer} />
+      {/* TO REMOVE in future releases: нижняя панель и переходы на volume/more с неё. */}
       <TabBar
         screen={screen}
         playerOpen={phase !== 'closed'}

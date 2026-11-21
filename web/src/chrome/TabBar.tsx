@@ -1,3 +1,4 @@
+// TO REMOVE in future releases: нижняя панель не показывается в текущем UI (body.chrome-hidden) и из живых экранов не открывается.
 import type { ScreenName } from '../app/screen';
 import './TabBar.css';
 

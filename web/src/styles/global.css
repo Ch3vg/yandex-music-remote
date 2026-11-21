@@ -89,6 +89,7 @@ body.player-open .app {
 body.player-open .mini-player {
   display: none !important;
 }
+/* TO REMOVE in future releases: скрытие мёртвой нижней панели */
 body.chrome-hidden .tab-bar {
   display: none !important;
 }
