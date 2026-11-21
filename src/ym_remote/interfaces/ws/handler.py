@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hmac
 import json
 import math
+import secrets
 
 from pydantic import ValidationError
 
@@ -25,21 +27,90 @@ def _positive_id(raw) -> int | None:
     return parsed if parsed > 0 else None
 
 
+GUEST_FORBIDDEN = frozenset({
+    "play_now",
+    "play",
+    "queue",
+    "play_queue_track",
+    "play_album",
+    "play_artist",
+    "start_wave",
+    "track_reaction",
+})
+ADMIN_REQUIRED = "Нужны права администратора"
+WRONG_PIN = "Неверный PIN"
+
+
 class CommandHandler:
-    def __init__(self, transport: TransportService, queue: QueueService, monitor: MonitorService, hub) -> None:
+    def __init__(
+        self,
+        transport: TransportService,
+        queue: QueueService,
+        monitor: MonitorService,
+        hub,
+        *,
+        pin: str = "",
+        sessions: dict[str, str] | None = None,
+    ) -> None:
         self.transport = transport
         self.queue = queue
         self.monitor = monitor
         self.hub = hub
+        self.pin = pin
+        self.sessions = sessions if sessions is not None else {}
+
+    def _role_of(self, websocket) -> str:
+        return "admin" if getattr(websocket, "role", None) == "admin" else "guest"
+
+    def _remember(self, websocket, role: str, token: str | None = None) -> None:
+        websocket.role = role
+        if token:
+            websocket.session_token = token
+        elif role != "admin":
+            websocket.session_token = None
+
+    async def _send_role(self, websocket, role: str, token: str | None = None) -> None:
+        self._remember(websocket, role, token)
+        payload: dict = {"type": "role", "role": role}
+        if token:
+            payload["token"] = token
+        await self.hub.send(websocket, payload)
 
     async def handle(self, websocket, message: dict) -> None:
         command = message.get("command")
         if not isinstance(command, str):
             return
+        if command in GUEST_FORBIDDEN and self._role_of(websocket) != "admin":
+            await self._error(websocket, ADMIN_REQUIRED)
+            return
         method = getattr(self, f"_cmd_{command}", None)
         if method is None:
             return
         await method(websocket, message)
+
+    async def _cmd_hello(self, websocket, message: dict) -> None:
+        token = message.get("token")
+        role = "admin" if isinstance(token, str) and self.sessions.get(token) == "admin" else "guest"
+        kept = token if role == "admin" and isinstance(token, str) else None
+        self._remember(websocket, role, kept)
+        await self.hub.send(websocket, {"type": "role", "role": role})
+
+    async def _cmd_unlock(self, websocket, message: dict) -> None:
+        pin = message.get("pin")
+        if not self.pin or not isinstance(pin, str) or not hmac.compare_digest(pin, self.pin):
+            await self._error(websocket, WRONG_PIN)
+            return
+        token = secrets.token_urlsafe(32)
+        self.sessions[token] = "admin"
+        await self._send_role(websocket, "admin", token)
+
+    async def _cmd_lock(self, websocket, message: dict) -> None:
+        token = message.get("token")
+        if not isinstance(token, str) or not token:
+            token = getattr(websocket, "session_token", None)
+        if isinstance(token, str) and token:
+            self.sessions.pop(token, None)
+        await self._send_role(websocket, "guest")
 
     async def _cmd_play_pause(self, websocket, message: dict) -> None:
         if await self.transport.play_pause():

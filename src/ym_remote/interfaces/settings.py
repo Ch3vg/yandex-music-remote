@@ -33,6 +33,7 @@ class Settings:
     port: int
     cdp_port: int
     root: Path
+    remote_pin: str = ""
 
     @classmethod
     def from_env(cls, root: Path | None = None) -> Settings:
@@ -45,4 +46,5 @@ class Settings:
             port=_port("PORT", 8001),
             cdp_port=_port("CDP_PORT", 9222),
             root=root,
+            remote_pin=os.environ.get("REMOTE_PIN", "").strip(),
         )

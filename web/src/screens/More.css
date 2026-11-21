@@ -67,3 +67,31 @@
   transform: translateX(18px);
   background: #000;
 }
+.more-role {
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.more-pin {
+  display: flex;
+  gap: 8px;
+}
+.more-pin input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font: inherit;
+}
+.more-pin-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: var(--accent, #ffcc00);
+  color: #000;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}

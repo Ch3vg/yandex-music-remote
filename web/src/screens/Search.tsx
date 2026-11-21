@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { fetchJson } from '../api/http';
 import type { ArtistCard, CatalogTrack, PromoCard, SearchResponse } from '../api/types';
 import { send } from '../api/ws';
+import { useRole } from '../store/role';
 import { TrackRow } from '../components/TrackRow';
 import { normalizeCoverUrl } from '../lib/coverUrl';
 import './Search.css';
@@ -76,6 +77,7 @@ export function Search({ active, fromHome, onBack, onOpenArtist, onPlay, onMenu 
   const [tracks, setTracks] = useState<CatalogTrack[]>([]);
   const [waves, setWaves] = useState<PromoCard[]>([]);
   const [lumen, setLumen] = useState<PromoCard | null>(null);
+  const admin = useRole() === 'admin';
 
   const run = () => {
     const q = query.trim();
@@ -103,7 +105,7 @@ export function Search({ active, fromHome, onBack, onOpenArtist, onPlay, onMenu 
   };
 
   const nothingFound = status === 'done' && artists.length === 0 && tracks.length === 0 && waves.length === 0 && !lumen;
-  const showPromos = status === 'done' && (waves.length > 0 || lumen);
+  const showPromos = admin && status === 'done' && (waves.length > 0 || lumen);
 
   return (
     <section className={active ? 'screen active' : 'screen'} id="screenSearch">

@@ -1,3 +1,4 @@
+/* TO REMOVE in future releases: стили мёртвой нижней панели, см. TabBar.tsx */
 .tab-bar {
   position: fixed;
   left: 0;

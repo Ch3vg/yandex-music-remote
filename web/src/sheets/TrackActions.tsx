@@ -3,6 +3,7 @@ import type { CatalogTrack, PlayMode } from '../api/types';
 import { send } from '../api/ws';
 import { WaveBanner } from '../components/WaveBanner';
 import { useWorkPending } from '../store/busy';
+import { useRole } from '../store/role';
 import {
   type ArtistChipItem,
   buildInitialArtistChips,
@@ -93,6 +94,7 @@ function ArtistChipAvatar({ url, name }: { url: string | null | undefined; name:
 
 export function TrackActions({ track, playback = false, onClose, onAction, onSelectArtist }: Props) {
   const waveBusy = useWorkPending();
+  const admin = useRole() === 'admin';
   const lastTrackRef = useRef<CatalogTrack | null>(null);
   if (track) {
     lastTrackRef.current = track;
@@ -171,7 +173,7 @@ export function TrackActions({ track, playback = false, onClose, onAction, onSel
           ) : null}
         </div>
 
-        {(playback || canWave) ? (
+        {admin && (playback || canWave) ? (
           <WaveBanner
             id="btnTrackWave"
             kicker="Моя волна по треку"
@@ -194,7 +196,7 @@ export function TrackActions({ track, playback = false, onClose, onAction, onSel
 
         {canPlayTrack && !playback ? (
           <ul className="track-action-list" id="trackActionList">
-            {ACTIONS.map((action) => (
+            {ACTIONS.filter((action) => admin || action.id !== 'now').map((action) => (
               <li key={action.id}>
                 <button
                   type="button"

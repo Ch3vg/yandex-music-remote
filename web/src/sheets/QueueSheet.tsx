@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { CatalogTrack, QueueItem, QueuePayload } from '../api/types';
 import { send } from '../api/ws';
 import { usePlaybackSelector } from '../store/playback';
+import { useRole } from '../store/role';
 import './QueueSheet.css';
 
 function scrollQueueToDefault(container: HTMLElement): void {
@@ -44,14 +45,14 @@ function QueueTrack({
   item: QueueItem;
   current: boolean;
   anchor: boolean;
-  onPick: (item: QueueItem) => void;
+  onPick?: (item: QueueItem) => void;
   onMenu: (track: CatalogTrack) => void;
 }) {
   return (
     <li
       className={current ? 'queue-track current' : 'queue-track'}
       id={anchor ? 'queueScrollAnchor' : undefined}
-      onClick={item.track_id == null ? undefined : () => onPick(item)}
+      onClick={onPick && item.track_id != null ? () => onPick(item) : undefined}
     >
       {item.cover ? <img src={item.cover} alt="" /> : null}
       <div className="queue-meta">
@@ -79,7 +80,7 @@ function QueueBody({
   onMenu,
 }: {
   queue: QueuePayload | null;
-  onPick: (item: QueueItem) => void;
+  onPick?: (item: QueueItem) => void;
   onMenu: (track: CatalogTrack) => void;
 }) {
   if (!queue) return null;
@@ -143,6 +144,7 @@ export function QueueSheet({
   onMenu: (track: CatalogTrack) => void;
 }) {
   const queue = usePlaybackSelector((view) => view.queue);
+  const admin = useRole() === 'admin';
   const epoch = usePlaybackSelector((view) => view.queueEpoch);
   const scrollRef = useRef<HTMLDivElement>(null);
   const saved = useRef(0);
@@ -206,7 +208,7 @@ export function QueueSheet({
         }}
       >
         <ul id="queueList">
-          <QueueBody queue={queue} onPick={pick} onMenu={onMenu} />
+          <QueueBody queue={queue} onPick={admin ? pick : undefined} onMenu={onMenu} />
         </ul>
       </div>
     </div>

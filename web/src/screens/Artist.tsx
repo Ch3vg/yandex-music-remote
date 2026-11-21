@@ -6,6 +6,7 @@ import type { ArtistTracksMode } from '../app/screen';
 import { TrackRow } from '../components/TrackRow';
 import { WaveBanner } from '../components/WaveBanner';
 import { useWorkPending } from '../store/busy';
+import { useRole } from '../store/role';
 import { normalizeCoverUrl } from '../lib/coverUrl';
 import {
   DEFAULT_ARTIST_AMBIENT_RGB,
@@ -195,6 +196,7 @@ export function Artist({
   onMenu,
 }: Props) {
   const waveBusy = useWorkPending();
+  const admin = useRole() === 'admin';
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [detail, setDetail] = useState<ArtistDetail | null>(null);
   const [error, setError] = useState('');
@@ -360,7 +362,7 @@ export function Artist({
             <div className="artist-ambient-tail" aria-hidden="true" />
 
             <div className="artist-content">
-              <div className="artist-actions">
+              {admin ? <div className="artist-actions">
                 <button
                   type="button"
                   className="artist-play-action"
@@ -384,7 +386,7 @@ export function Artist({
                   </span>
                   <span className="artist-play-caption">Слушать</span>
                 </button>
-              </div>
+              </div> : null}
 
               {popularSlides.length > 0 ? (
                 <div className="artist-popular-block">
@@ -433,16 +435,18 @@ export function Artist({
                 </button>
               ) : null}
 
-              <WaveBanner
-                id="btnArtistWave"
-                kicker="Моя волна по исполнителю"
-                title={detail.name}
-                tone="collection"
-                disabled={waveBusy || !(artistId > 0)}
-                onClick={() => {
-                  if (artistId > 0) send({ command: 'start_wave', source: 'artist', artist_id: artistId });
-                }}
-              />
+              {admin ? (
+                <WaveBanner
+                  id="btnArtistWave"
+                  kicker="Моя волна по исполнителю"
+                  title={detail.name}
+                  tone="collection"
+                  disabled={waveBusy || !(artistId > 0)}
+                  onClick={() => {
+                    if (artistId > 0) send({ command: 'start_wave', source: 'artist', artist_id: artistId });
+                  }}
+                />
+              ) : null}
 
               <AlbumCarouselSection
                 heading="Альбомы"

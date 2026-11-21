@@ -174,6 +174,9 @@ export type QueuePayload = {
 export type PlayMode = 'now' | 'next' | 'queue';
 
 export type ClientCommand =
+  | { command: 'hello'; token?: string }
+  | { command: 'unlock'; pin: string }
+  | { command: 'lock'; token?: string }
   | { command: 'play_pause' | 'next' | 'prev' | 'cycle_repeat' | 'show_queue' | 'refresh_queue' }
   | { command: 'set_volume'; value: number }
   | { command: 'seek'; position_sec: number }

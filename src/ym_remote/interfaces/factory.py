@@ -56,7 +56,13 @@ def create_app(
     app.state.catalog = catalog
     app.state.hub = hub
     app.state.services = services
-    app.state.handler = CommandHandler(services.transport, services.queue, services.monitor, hub)
+    app.state.handler = CommandHandler(
+        services.transport,
+        services.queue,
+        services.monitor,
+        hub,
+        pin=settings.remote_pin,
+    )
     app.state.background = background
     app.include_router(router)
     return app

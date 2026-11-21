@@ -5,6 +5,7 @@ import { send } from '../api/ws';
 import { TrackRow } from '../components/TrackRow';
 import { WaveBanner } from '../components/WaveBanner';
 import { useWorkPending } from '../store/busy';
+import { useRole } from '../store/role';
 import './Playlist.css';
 
 export type PlaylistRequest = {
@@ -30,6 +31,7 @@ function indexed(tracks: CatalogTrack[], track: CatalogTrack): CatalogTrack {
 
 export function Playlist({ active, request, onBack, onPlay, onMenu, onContext }: Props) {
   const waveBusy = useWorkPending();
+  const admin = useRole() === 'admin';
   const [title, setTitle] = useState(request?.title || 'Плейлист');
   const [filter, setFilter] = useState('');
   const [tracks, setTracks] = useState<CatalogTrack[]>([]);
@@ -107,7 +109,7 @@ export function Playlist({ active, request, onBack, onPlay, onMenu, onContext }:
           onChange={(event) => setFilter(event.target.value)}
         />
       </div>
-      {playlistUuid ? (
+      {admin && playlistUuid ? (
         <div className="playlist-wave">
           <WaveBanner
             id="btnPlaylistWave"

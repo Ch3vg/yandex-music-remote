@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { NetworkInfo } from '../api/types';
+import { RoleUnlock } from '../components/RoleUnlock';
 import { fetchJson } from '../api/http';
 import { isShadeSupported, toggleShade, useShadeEnabled } from '../lib/shade';
 import { pushToast } from '../store/playback';
@@ -86,6 +87,7 @@ export function QrSheet({ open, onClose }: { open: boolean; onClose: () => void 
             </span>
           </button>
         )}
+        <RoleUnlock />
         <button type="button" className="search-go" id="btnQrClose" onClick={onClose}>
           Закрыть
         </button>

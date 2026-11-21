@@ -10,8 +10,22 @@ from ym_remote.services.texts import API_NOT_READY
 
 def _app():
     root = Path(__file__).resolve().parents[2]
-    settings = Settings(token="test-token", local_ip=None, port=8001, cdp_port=9222, root=root)
+    settings = Settings(
+        token="test-token",
+        local_ip=None,
+        port=8001,
+        cdp_port=9222,
+        root=root,
+        remote_pin="test-pin",
+    )
     return create_app(settings, discovered=["192.168.1.10", "10.0.0.5"], background=False)
+
+
+def _as_admin(ws) -> None:
+    ws.send_json({"command": "unlock", "pin": "test-pin"})
+    role = ws.receive_json()
+    assert role["type"] == "role"
+    assert role["role"] == "admin"
 
 
 def test_network_manifest_open_and_icons():
@@ -103,6 +117,7 @@ def test_ws_keeps_connection_alive_on_cdp_errors_and_invalid_numbers():
 
     with TestClient(app) as client:
         with client.websocket_connect("/ws") as ws:
+            _as_admin(ws)
             ws.send_json({"command": "play_pause"})
             ws.send_json({"command": "set_volume", "value": "NaN"})
             assert ws.receive_json() == {"type": "error", "message": VOLUME_FAILED}
@@ -304,6 +319,7 @@ def test_artist_album_and_api_search_http_routes_and_ws_commands():
         }
 
         with client.websocket_connect("/ws") as ws:
+            _as_admin(ws)
             ws.send_json({"command": "play_artist", "artist_id": 0})
             assert ws.receive_json() == {"type": "error", "message": ARTIST_PLAY_FAILED}
 

@@ -3,6 +3,7 @@ import type { CatalogTrack, HomeResponse, PlayContext } from '../api/types';
 import { fetchJson } from '../api/http';
 import { send } from '../api/ws';
 import { useWorkPending } from '../store/busy';
+import { useRole } from '../store/role';
 import { CoverFrame } from '../components/CoverArt';
 import { WaveBanner } from '../components/WaveBanner';
 import { TrackRow } from '../components/TrackRow';
@@ -61,6 +62,7 @@ export function Home({
   onLikesContext,
 }: Props) {
   const waveBusy = useWorkPending();
+  const admin = useRole() === 'admin';
   const [status, setStatus] = useState<Status>('loading');
   const [error, setError] = useState('');
   const [title, setTitle] = useState('Мне нравится');
@@ -131,14 +133,16 @@ export function Home({
         </button>
       </div>
       <div className="home-scroll" id="homeScroll">
-        <WaveBanner
-          id="btnMyWave"
-          kicker="Моя волна по коллекции"
-          title="Коллекция"
-          tone="collection"
-          disabled={waveBusy}
-          onClick={() => send({ command: 'start_wave', source: 'personal' })}
-        />
+        {admin ? (
+          <WaveBanner
+            id="btnMyWave"
+            kicker="Моя волна по коллекции"
+            title="Коллекция"
+            tone="collection"
+            disabled={waveBusy}
+            onClick={() => send({ command: 'start_wave', source: 'personal' })}
+          />
+        ) : null}
         <button
           type="button"
           className="likes-hero"
